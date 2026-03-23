@@ -1,11 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Serialize;
-use snafu::OptionExt;
 
-use crate::{
-    commands::login::{fetch_qrcode, fetch_qrcode_status},
-    errors::LoginFailedSnafu,
-};
+use crate::commands::login::{fetch_qrcode, fetch_qrcode_status};
 
 #[derive(Debug, Serialize)]
 pub struct QrcodeOutput {
@@ -28,14 +24,14 @@ pub struct QrcodeStatusOutput {
 pub async fn print_qrcode() -> Result<()> {
     let response = fetch_qrcode().await?;
     let output = QrcodeOutput {
-        qrcode_id: response.qrcode_id().context(LoginFailedSnafu {
-            reason: "no qrcode_id",
-        })?
-        .to_string(),
-        qrcode_url: response.qrcode_url().context(LoginFailedSnafu {
-            reason: "no qrcode_url",
-        })?
-        .to_string(),
+        qrcode_id: response
+            .qrcode_id()
+            .context("Login failed: no qrcode_id")?
+            .to_string(),
+        qrcode_url: response
+            .qrcode_url()
+            .context("Login failed: no qrcode_url")?
+            .to_string(),
     };
 
     println!("{}", serde_json::to_string_pretty(&output)?);

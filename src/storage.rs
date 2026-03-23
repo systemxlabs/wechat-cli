@@ -1,12 +1,7 @@
 use std::path::PathBuf;
 
+use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
-use snafu::{IntoError, ResultExt};
-
-use crate::{
-    Result,
-    errors::{IoSnafu, JsonSnafu},
-};
 
 /// Fixed `WeChat` iLink API root.
 pub const ILINK_API_ROOT: &str = "https://ilinkai.weixin.qq.com";
@@ -59,15 +54,18 @@ fn load_accounts_file() -> Result<AccountsFile> {
     if !path.exists() {
         return Ok(AccountsFile::default());
     }
-    let data = std::fs::read_to_string(&path).context(IoSnafu)?;
-    serde_json::from_str(&data).context(JsonSnafu)
+    let data = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read accounts file `{}`", path.display()))?;
+    serde_json::from_str(&data).context("failed to parse accounts file")
 }
 
 fn save_accounts_file(accounts: &AccountsFile) -> Result<()> {
     let path = accounts_file_path();
-    std::fs::create_dir_all(path.parent().unwrap()).context(IoSnafu)?;
-    let json = serde_json::to_string_pretty(accounts).context(JsonSnafu)?;
-    std::fs::write(&path, json).context(IoSnafu)?;
+    std::fs::create_dir_all(path.parent().unwrap())
+        .with_context(|| format!("failed to create storage directory `{}`", path.parent().unwrap().display()))?;
+    let json = serde_json::to_string_pretty(accounts).context("failed to serialize accounts file")?;
+    std::fs::write(&path, json)
+        .with_context(|| format!("failed to write accounts file `{}`", path.display()))?;
     Ok(())
 }
 
@@ -89,13 +87,7 @@ pub fn get_account_data(account_id: &str) -> Result<AccountData> {
         .accounts
         .into_iter()
         .find(|account| account.user_id == account_id)
-        .ok_or_else(|| {
-            IoSnafu
-                .into_error(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("account `{account_id}` not found"),
-                ))
-        })
+        .ok_or_else(|| anyhow!("account `{account_id}` not found"))
 }
 
 /// Saves credentials for the given stable user ID to local storage.
