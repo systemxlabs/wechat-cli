@@ -2,9 +2,11 @@
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 [![Crates.io](https://img.shields.io/crates/v/wechat-cli.svg)](https://crates.io/crates/wechat-cli)
-[![Docs](https://docs.rs/wechat-cli/badge.svg)](https://docs.rs/wechat-cli/latest/wechat_cli/)
+[![Docs](https://docs.rs/wechat-cli/badge.svg)](https://docs.rs/wechat-cli/latest/)
 
 `wechat-cli` is a command-line client for the WeChat iLink Bot API.
+
+It supports both interactive terminal flows and machine-readable JSON output for automation and agent workflows.
 
 It supports:
 
@@ -102,6 +104,8 @@ wechat-cli login
 wechat-cli account list
 ```
 
+Each entry includes an `account` index that can be passed back into `wechat-cli send --account <index>`.
+
 ### `qrcode`
 
 ```bash
@@ -116,6 +120,8 @@ Prints JSON like:
   "qrcode_url": "..."
 }
 ```
+
+The JSON is written to stdout and is intended for non-interactive consumers.
 
 ### `qrcode-status`
 
@@ -137,6 +143,8 @@ When the QR code is confirmed, the JSON also includes:
 - `bot_token`
 - `bot_id`
 - `user_id`
+
+The JSON is written to stdout and is intended for non-interactive consumers.
 
 ### `get-context-token`
 

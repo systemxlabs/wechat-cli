@@ -43,6 +43,8 @@ Message direction:
 5. When `status` becomes `confirmed`, read `bot_token`, `bot_id`, and `user_id` from the JSON output.
 6. Use those credentials directly. These commands do not save anything locally.
 
+Both commands print machine-readable JSON to stdout.
+
 ## Commands
 
 ### Request QR Code
@@ -80,6 +82,8 @@ wechat-cli account list
 ```
 
 Use this to find saved account indexes and inspect `user_id` and `bot_id`.
+
+Reuse the printed `account` index with `wechat-cli send --account <index>`.
 
 ### Get Context Token
 
