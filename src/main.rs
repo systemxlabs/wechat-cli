@@ -1,10 +1,7 @@
 mod cli;
 mod commands;
-mod errors;
 mod storage;
 mod wechat;
-
-pub use errors::{Error, Result};
 
 use anyhow::Result as AnyResult;
 use clap::Parser;
@@ -13,7 +10,7 @@ use commands::login::login;
 
 #[tokio::main]
 async fn main() -> AnyResult<()> {
-    init_tracing();
+    init_logger();
     let cli = Cli::parse();
 
     match cli.command {
@@ -29,6 +26,12 @@ async fn main() -> AnyResult<()> {
         }
         Command::Account(args) => match args.command {
             AccountCommand::List => commands::account::print_accounts()?,
+            AccountCommand::Add(args) => commands::account::add_account(
+                &args.user_id,
+                &args.bot_id,
+                &args.token,
+                args.route_tag.as_deref(),
+            )?,
             AccountCommand::Delete(args) => {
                 commands::account::delete_account(args.account, args.user_id.as_deref())?
             }
@@ -54,12 +57,9 @@ async fn main() -> AnyResult<()> {
     Ok(())
 }
 
-fn init_tracing() {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "warn,wechat_cli=info".into()),
-        )
-        .with_target(false)
-        .try_init();
+fn init_logger() {
+    let env = env_logger::Env::default().default_filter_or("warn,wechat_cli=info");
+    let mut builder = env_logger::Builder::from_env(env);
+    builder.format_target(false);
+    let _ = builder.try_init();
 }

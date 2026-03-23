@@ -1,16 +1,13 @@
 use std::path::Path;
 
 use aes::Aes128;
+use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use block_padding::Pkcs7;
 use cipher::{BlockEncryptMut as _, KeyInit};
 use ecb;
-use snafu::ResultExt;
 
-use crate::{
-    errors::{ApiSnafu, HttpSnafu, IoSnafu},
-    storage::CDN_BASE_URL,
-};
+use crate::storage::CDN_BASE_URL;
 
 use super::api::{WeixinApiClient, build_http_client};
 use super::models::{FileItem, GetUploadUrlRequest, ImageItem, OutboundMessageItem};
@@ -44,12 +41,13 @@ pub async fn upload_media(
     to_user_id: &str,
     file_path: &Path,
     kind: OutboundMediaKind,
-) -> crate::Result<UploadedMedia> {
+) -> Result<UploadedMedia> {
     let file_name = file_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("file");
-    let data = std::fs::read(file_path).context(IoSnafu)?;
+    let data = std::fs::read(file_path)
+        .with_context(|| format!("failed to read `{}`", file_path.display()))?;
     let file_size = data.len() as u64;
     let rawfilemd5 = format!("{:x}", md5::compute(&data));
 
@@ -75,13 +73,9 @@ pub async fn upload_media(
             aes_key_hex.clone(),
         ))
         .await?;
-    let upload_param = upload_info.upload_param().ok_or_else(|| {
-        ApiSnafu {
-            code: -1_i64,
-            message: "no upload_param in response".to_owned(),
-        }
-        .build()
-    })?;
+    let upload_param = upload_info
+        .upload_param()
+        .ok_or_else(|| anyhow!("no upload_param in response"))?;
     let upload_url = reqwest::Url::parse_with_params(
         &format!("{CDN_BASE_URL}/upload"),
         [
@@ -89,13 +83,7 @@ pub async fn upload_media(
             ("filekey", filekey_hex.as_str()),
         ],
     )
-    .map_err(|e| {
-        ApiSnafu {
-            code: -1_i64,
-            message: format!("invalid upload url: {e}"),
-        }
-        .build()
-    })?;
+    .map_err(|e| anyhow!("invalid upload url: {e}"))?;
 
     let client = build_http_client();
     let resp = client
@@ -104,19 +92,13 @@ pub async fn upload_media(
         .body(encrypted)
         .send()
         .await
-        .context(HttpSnafu)?;
-    let resp = resp.error_for_status().context(HttpSnafu)?;
+        .context("failed to upload encrypted media to CDN")?;
+    let resp = resp.error_for_status().context("CDN upload returned an error status")?;
     let encrypt_query_param = resp
         .headers()
         .get("x-encrypted-param")
         .and_then(|value| value.to_str().ok())
-        .ok_or_else(|| {
-            ApiSnafu {
-                code: -1_i64,
-                message: "CDN upload response missing x-encrypted-param".to_owned(),
-            }
-            .build()
-        })?;
+        .ok_or_else(|| anyhow!("CDN upload response missing x-encrypted-param"))?;
 
     Ok(UploadedMedia {
         encrypt_query_param: encrypt_query_param.to_string(),

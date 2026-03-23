@@ -1,12 +1,7 @@
 use std::path::PathBuf;
 
+use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
-use snafu::{IntoError, ResultExt};
-
-use crate::{
-    Result,
-    errors::{IoSnafu, JsonSnafu},
-};
 
 /// Fixed `WeChat` iLink API root.
 pub const ILINK_API_ROOT: &str = "https://ilinkai.weixin.qq.com";
@@ -25,11 +20,7 @@ fn accounts_file_path() -> PathBuf {
     storage_root().join("accounts.json")
 }
 
-fn account_config_file_path(account_id: &str) -> PathBuf {
-    storage_root()
-        .join("config")
-        .join(format!("{account_id}.json"))
-}
+
 
 /// Persisted authentication credentials for a single `WeChat` account.
 #[derive(Debug, Serialize, Deserialize)]
@@ -45,13 +36,8 @@ pub struct AccountData {
     /// The iLink user ID associated with this account.
     #[serde(rename = "userId")]
     pub user_id: String,
-}
-
-/// Per-user configuration loaded from local storage.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AccountConfig {
     /// Optional routing tag sent as a header on every API request.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_tag: Option<String>,
 }
 
@@ -65,15 +51,18 @@ fn load_accounts_file() -> Result<AccountsFile> {
     if !path.exists() {
         return Ok(AccountsFile::default());
     }
-    let data = std::fs::read_to_string(&path).context(IoSnafu)?;
-    serde_json::from_str(&data).context(JsonSnafu)
+    let data = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read accounts file `{}`", path.display()))?;
+    serde_json::from_str(&data).context("failed to parse accounts file")
 }
 
 fn save_accounts_file(accounts: &AccountsFile) -> Result<()> {
     let path = accounts_file_path();
-    std::fs::create_dir_all(path.parent().unwrap()).context(IoSnafu)?;
-    let json = serde_json::to_string_pretty(accounts).context(JsonSnafu)?;
-    std::fs::write(&path, json).context(IoSnafu)?;
+    std::fs::create_dir_all(path.parent().unwrap())
+        .with_context(|| format!("failed to create storage directory `{}`", path.parent().unwrap().display()))?;
+    let json = serde_json::to_string_pretty(accounts).context("failed to serialize accounts file")?;
+    std::fs::write(&path, json)
+        .with_context(|| format!("failed to write accounts file `{}`", path.display()))?;
     Ok(())
 }
 
@@ -95,13 +84,7 @@ pub fn get_account_data(account_id: &str) -> Result<AccountData> {
         .accounts
         .into_iter()
         .find(|account| account.user_id == account_id)
-        .ok_or_else(|| {
-            IoSnafu
-                .into_error(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("account `{account_id}` not found"),
-                ))
-        })
+        .ok_or_else(|| anyhow!("account `{account_id}` not found"))
 }
 
 /// Saves credentials for the given stable user ID to local storage.
@@ -117,6 +100,7 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
             saved_at: data.saved_at.clone(),
             bot_id: data.bot_id.clone(),
             user_id: data.user_id.clone(),
+            route_tag: data.route_tag.clone(),
         };
     } else {
         accounts.accounts.push(AccountData {
@@ -124,6 +108,7 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
             saved_at: data.saved_at.clone(),
             bot_id: data.bot_id.clone(),
             user_id: data.user_id.clone(),
+            route_tag: data.route_tag.clone(),
         });
     }
     save_accounts_file(&accounts)
@@ -135,30 +120,9 @@ pub fn delete_account_data(account_id: &str) -> Result<()> {
     let original_len = accounts.accounts.len();
     accounts.accounts.retain(|account| account.user_id != account_id);
     if accounts.accounts.len() == original_len {
-        return Err(IoSnafu
-            .into_error(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("account `{account_id}` not found"),
-            )));
+        return Err(anyhow!("account `{account_id}` not found"));
     }
     save_accounts_file(&accounts)
-}
-
-/// Loads the optional per-user configuration, returning `None` if absent.
-pub fn get_account_config(account_id: &str) -> Option<AccountConfig> {
-    let path = account_config_file_path(account_id);
-    let data = std::fs::read_to_string(&path).ok()?;
-    serde_json::from_str(&data).ok()
-}
-
-/// Deletes optional per-user configuration, ignoring missing files.
-pub fn delete_account_config(account_id: &str) -> Result<()> {
-    let path = account_config_file_path(account_id);
-    if !path.exists() {
-        return Ok(());
-    }
-    std::fs::remove_file(&path).context(IoSnafu)?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -182,19 +146,23 @@ mod tests {
     }
 
     #[test]
-    fn test_account_config_serde() {
-        let config = AccountConfig {
+    fn test_account_data_with_route_tag() {
+        let data = AccountData {
+            token: "tok_abc".to_string(),
+            saved_at: "2025-01-01T00:00:00Z".to_string(),
+            bot_id: "bot_123".to_string(),
+            user_id: "user_123".to_string(),
             route_tag: Some("tag_xyz".to_string()),
         };
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized: AccountConfig = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&data).unwrap();
+        let deserialized: AccountData = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.route_tag, Some("tag_xyz".to_string()));
     }
 
     #[test]
-    fn test_account_config_default_route_tag() {
-        let json = r"{}";
-        let config: AccountConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.route_tag, None);
+    fn test_account_data_without_route_tag() {
+        let json = r#"{"token":"tok_abc","savedAt":"2025-01-01T00:00:00Z","botId":"bot_123","userId":"user_123"}"#;
+        let data: AccountData = serde_json::from_str(json).unwrap();
+        assert_eq!(data.route_tag, None);
     }
 }

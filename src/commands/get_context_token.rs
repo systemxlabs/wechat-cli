@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 
 use crate::{
     commands::account::{build_client, load_account},
-    errors::Error,
+    wechat::api::is_session_expired,
     wechat::models::InboundMessage,
 };
 
@@ -37,10 +37,10 @@ pub async fn run(user_id: Option<&str>) -> Result<()> {
                     }
                 }
             }
-            Err(Error::SessionExpired) => {
+            Err(err) if is_session_expired(&err) => {
                 bail!("session expired for user `{user_id}`, re-run `wechat-cli login`");
             }
-            Err(Error::Http { source }) if source.is_timeout() => {}
+            Err(err) if is_timeout_error(&err) => {}
             Err(err) => {
                 consecutive_errors += 1;
                 eprintln!("get-context-token error ({consecutive_errors}): {err}");
@@ -53,6 +53,12 @@ pub async fn run(user_id: Option<&str>) -> Result<()> {
             }
         }
     }
+}
+
+fn is_timeout_error(err: &anyhow::Error) -> bool {
+    err.chain()
+        .find_map(|cause| cause.downcast_ref::<reqwest::Error>())
+        .is_some_and(reqwest::Error::is_timeout)
 }
 
 fn extract_context_token(bot_id: &str, message: &InboundMessage) -> Option<String> {

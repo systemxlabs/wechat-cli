@@ -49,8 +49,26 @@ pub struct AccountArgs {
 pub enum AccountCommand {
     /// List saved accounts in index order.
     List,
+    /// Add or overwrite a saved account.
+    Add(AccountAddArgs),
     /// Delete a saved account.
     Delete(AccountDeleteArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct AccountAddArgs {
+    /// WeChat user ID ending with `@im.wechat`.
+    #[arg(long)]
+    pub user_id: String,
+    /// Bot ID ending with `@im.bot`.
+    #[arg(long)]
+    pub bot_id: String,
+    /// Bot token used to authenticate API requests.
+    #[arg(long)]
+    pub token: String,
+    /// Optional route tag saved for later requests.
+    #[arg(long)]
+    pub route_tag: Option<String>,
 }
 
 #[derive(Debug, Args)]

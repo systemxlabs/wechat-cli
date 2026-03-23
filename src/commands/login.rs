@@ -1,8 +1,7 @@
-use snafu::OptionExt;
-use tracing::{info, warn};
+use anyhow::{Context, Result, anyhow, bail};
+use log::{info, warn};
 
 use crate::{
-    errors::{LoginFailedSnafu, QrCodeExpiredSnafu, Result},
     storage,
     wechat::{
         api::WeixinApiClient,
@@ -22,19 +21,11 @@ pub async fn fetch_qrcode_status(qrcode_id: &str) -> Result<QrCodeStatusResponse
 
 pub async fn login() -> Result<String> {
     let qr_resp = fetch_qrcode().await?;
-    let qrcode_url = qr_resp.qrcode_url().context(LoginFailedSnafu {
-        reason: "no qrcode_url",
-    })?;
-    let qrcode_id = qr_resp.qrcode_id().context(LoginFailedSnafu {
-        reason: "no qrcode_id",
-    })?;
+    let qrcode_url = qr_resp.qrcode_url().context("Login failed: no qrcode_url")?;
+    let qrcode_id = qr_resp.qrcode_id().context("Login failed: no qrcode_id")?;
 
-    let qr = qrcode::QrCode::new(qrcode_url.as_bytes()).map_err(|e| {
-        LoginFailedSnafu {
-            reason: format!("QR generation failed: {e}"),
-        }
-        .build()
-    })?;
+    let qr = qrcode::QrCode::new(qrcode_url.as_bytes())
+        .map_err(|e| anyhow!("Login failed: QR generation failed: {e}"))?;
     let image = qr
         .render::<char>()
         .quiet_zone(true)
@@ -53,18 +44,18 @@ pub async fn login() -> Result<String> {
                 info!("QR code scanned, waiting for confirmation...");
             }
             "expired" => {
-                return Err(QrCodeExpiredSnafu.build());
+                bail!("QR code expired");
             }
             "confirmed" => {
-                let token = status_resp.bot_token().context(LoginFailedSnafu {
-                    reason: "no bot_token",
-                })?;
-                let bot_id = status_resp.ilink_bot_id().context(LoginFailedSnafu {
-                    reason: "no ilink_bot_id",
-                })?;
-                let user_id = status_resp.ilink_user_id().context(LoginFailedSnafu {
-                    reason: "no ilink_user_id",
-                })?;
+                let token = status_resp
+                    .bot_token()
+                    .context("Login failed: no bot_token")?;
+                let bot_id = status_resp
+                    .ilink_bot_id()
+                    .context("Login failed: no ilink_bot_id")?;
+                let user_id = status_resp
+                    .ilink_user_id()
+                    .context("Login failed: no ilink_user_id")?;
                 let account_id = user_id.to_string();
 
                 let account_data = storage::AccountData {
@@ -72,6 +63,7 @@ pub async fn login() -> Result<String> {
                     saved_at: chrono::Utc::now().to_rfc3339(),
                     bot_id: bot_id.to_string(),
                     user_id: user_id.to_string(),
+                    route_tag: None,
                 };
                 storage::save_account_data(&account_id, &account_data)?;
 
