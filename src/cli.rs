@@ -49,6 +49,24 @@ pub struct AccountArgs {
 pub enum AccountCommand {
     /// List saved accounts in index order.
     List,
+    /// Delete a saved account.
+    Delete(AccountDeleteArgs),
+}
+
+#[derive(Debug, Args)]
+#[command(group(
+    ArgGroup::new("selector")
+        .args(["account", "user_id"])
+        .required(true)
+        .multiple(false)
+))]
+pub struct AccountDeleteArgs {
+    /// Saved account index from `wechat-cli account list`.
+    #[arg(long)]
+    pub account: Option<usize>,
+    /// Saved account user ID.
+    #[arg(long)]
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Args)]

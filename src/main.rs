@@ -29,6 +29,9 @@ async fn main() -> AnyResult<()> {
         }
         Command::Account(args) => match args.command {
             AccountCommand::List => commands::account::print_accounts()?,
+            AccountCommand::Delete(args) => {
+                commands::account::delete_account(args.account, args.user_id.as_deref())?
+            }
         },
         Command::GetContextToken(args) => {
             commands::get_context_token::run(args.user_id.as_deref()).await?;

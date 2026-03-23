@@ -25,6 +25,12 @@ fn accounts_file_path() -> PathBuf {
     storage_root().join("accounts.json")
 }
 
+fn account_config_file_path(account_id: &str) -> PathBuf {
+    storage_root()
+        .join("config")
+        .join(format!("{account_id}.json"))
+}
+
 /// Persisted authentication credentials for a single `WeChat` account.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountData {
@@ -123,13 +129,36 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
     save_accounts_file(&accounts)
 }
 
+/// Deletes credentials for the given stable user ID from local storage.
+pub fn delete_account_data(account_id: &str) -> Result<()> {
+    let mut accounts = load_accounts_file()?;
+    let original_len = accounts.accounts.len();
+    accounts.accounts.retain(|account| account.user_id != account_id);
+    if accounts.accounts.len() == original_len {
+        return Err(IoSnafu
+            .into_error(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("account `{account_id}` not found"),
+            )));
+    }
+    save_accounts_file(&accounts)
+}
+
 /// Loads the optional per-user configuration, returning `None` if absent.
 pub fn get_account_config(account_id: &str) -> Option<AccountConfig> {
-    let path = storage_root()
-        .join("config")
-        .join(format!("{account_id}.json"));
+    let path = account_config_file_path(account_id);
     let data = std::fs::read_to_string(&path).ok()?;
     serde_json::from_str(&data).ok()
+}
+
+/// Deletes optional per-user configuration, ignoring missing files.
+pub fn delete_account_config(account_id: &str) -> Result<()> {
+    let path = account_config_file_path(account_id);
+    if !path.exists() {
+        return Ok(());
+    }
+    std::fs::remove_file(&path).context(IoSnafu)?;
+    Ok(())
 }
 
 #[cfg(test)]
