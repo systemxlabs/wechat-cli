@@ -1,6 +1,6 @@
 ---
 name: wechat-cli
-description: Use the `wechat-cli` command-line tool to request login QR codes, poll QR-code status for non-interactive agent flows, inspect saved accounts, wait for an inbound message to obtain a `context_token`, and send text, image, or file messages. Trigger this skill when a task requires operating the local `wechat-cli` binary instead of editing its source code.
+description: Use the `wechat-cli` command-line tool to request login QR codes, poll QR-code status for non-interactive agent flows, manage accounts (add, list, delete), wait for an inbound message to obtain a `context_token`, and send text, image, or file messages. Trigger this skill when a task requires operating the local `wechat-cli` binary instead of editing its source code.
 ---
 
 # wechat-cli
@@ -11,8 +11,7 @@ Use this skill when the task is to operate the local `wechat-cli` program.
 
 - Run commands in the repository root.
 - Install the binary first if needed with `cargo install --path .`.
-- Prefer invoking the installed command directly:
-  `wechat-cli`
+- Prefer invoking the installed command directly: `wechat-cli`
 - Network access to `https://ilinkai.weixin.qq.com` is required.
 - A valid send operation requires:
   - either one saved bot account or explicit credentials
@@ -32,59 +31,71 @@ Message direction:
 - user -> bot: `from_user_id = user_id`, `to_user_id = bot_id`
 - bot -> user: `to_user_id = user_id`
 
-## Non-Interactive Login Workflow
+## Login
+
+Use non-interactive login workflow for agents that cannot display QR codes interactively:
 
 1. Request a QR code:
-   `wechat-cli qrcode`
+   ```bash
+   wechat-cli qrcode
+   ```
 2. Read `qrcode_id` and `qrcode_url` from the JSON output.
 3. Show the QR code to the human outside the CLI.
 4. Poll status:
-   `wechat-cli qrcode-status --qrcode-id <qrcode_id>`
+   ```bash
+   wechat-cli qrcode-status --qrcode-id <qrcode_id>
+   ```
 5. When `status` becomes `confirmed`, read `bot_token`, `bot_id`, and `user_id` from the JSON output.
 6. Use those credentials directly. These commands do not save anything locally.
 
-## Commands
-
-### Request QR Code
-
-```
-wechat-cli qrcode
-```
-
-This prints JSON with:
-
-- `qrcode_id`
-- `qrcode_url`
-
-### Query QR Code Status
-
-```
-wechat-cli qrcode-status --qrcode-id <qrcode_id>
-```
-
-This prints JSON with:
-
-- `qrcode_id`
-- `status`
-
-When confirmed, it also includes:
-
-- `bot_token`
-- `bot_id`
-- `user_id`
+## Account
 
 ### List Accounts
 
-```
+```bash
 wechat-cli account list
 ```
 
 Use this to find saved account indexes and inspect `user_id` and `bot_id`.
 
-### Get Context Token
+### Add Account
 
+```bash
+wechat-cli account add \
+  --user-id <user_id> \
+  --bot-id <bot_id> \
+  --token <bot_token> \
+  [--route-tag <route_tag>]
 ```
-wechat-cli get-context-token --user-id <user_id>
+
+Requirements:
+
+- `user_id` must end with `@im.wechat`
+- `bot_id` must end with `@im.bot`
+- `token` cannot be empty
+
+### Delete Account
+
+By index:
+
+```bash
+wechat-cli account delete --account <index>
+```
+
+By user ID:
+
+```bash
+wechat-cli account delete --user-id <user_id>
+```
+
+## Send
+
+### Prerequisites
+
+Before sending, you need a `context_token`. Obtain it by:
+
+```bash
+wechat-cli get-context-token [--user-id <user_id>]
 ```
 
 Behavior:
@@ -97,65 +108,61 @@ If `--user-id` is omitted, saved account index `0` is used.
 
 ### Send Text
 
-```
-wechat-cli send --user-id <user_id> --context-token <token> --text "hello"
-```
-
-### Send File
-
-```
-wechat-cli send --user-id <user_id> --context-token <token> --file <file_path>
+```bash
+wechat-cli send \
+  [--account <index> | --user-id <user_id>] \
+  --context-token <token> \
+  --text "hello"
 ```
 
 ### Send Image
 
-```
-wechat-cli send --user-id <user_id> --context-token <token> --file <image_path>
+```bash
+wechat-cli send \
+  [--account <index> | --user-id <user_id>] \
+  --context-token <token> \
+  --file <image_path>
 ```
 
-### Send File Or Image With Caption
+### Send File
 
+```bash
+wechat-cli send \
+  [--account <index> | --user-id <user_id>] \
+  --context-token <token> \
+  --file <file_path>
 ```
-wechat-cli send --user-id <user_id> --context-token <token> --file <file_path> --caption "caption"
+
+### Send With Caption
+
+```bash
+wechat-cli send \
+  [--account <index> | --user-id <user_id>] \
+  --context-token <token> \
+  --file <file_path> \
+  --caption "caption text"
+```
+
+### Explicit Credential Mode
+
+Use this only when the task explicitly provides raw credentials instead of relying on saved accounts.
+
+```bash
+wechat-cli send \
+  --token <bot_token> \
+  --user-id <user_id> \
+  --context-token <token> \
+  [--route-tag <route_tag>] \
+  --text "hello"
 ```
 
 ## Account Selection Rules For `send`
 
 Saved-account mode selection order:
 
-1. `--account <index>`
-2. `--user-id <user_id>`
+1. `--account <index>` - explicit account index
+2. `--user-id <user_id>` - explicit user ID
 3. default saved account index `0`
-
-Examples:
-
-```
-wechat-cli send --account 0 --context-token <token> --text "hello"
-```
-
-```
-wechat-cli send --user-id <user_id> --context-token <token> --text "hello"
-```
-
-## Explicit Credential Mode
-
-Use this only when the task explicitly provides raw credentials instead of relying on saved accounts.
-
-Required flags:
-
-- `--token <token>`
-- `--user-id <user_id>`
-- `--context-token <token>`
-
-Optional flags:
-
-- `--route-tag <route_tag>`
-
-Example:
-
-```
-wechat-cli send --token <bot_token> --user-id <user_id> --context-token <token> --text "hello"
-```
 
 ## Important Rules
 
@@ -187,8 +194,9 @@ Not stored locally:
 
 Use built-in help before guessing flags:
 
-```
+```bash
 wechat-cli --help
+wechat-cli login --help
 wechat-cli qrcode --help
 wechat-cli qrcode-status --help
 wechat-cli account --help
