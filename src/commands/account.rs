@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 
 use crate::{
-    storage::{self, AccountConfig, AccountData},
+    storage::{self, AccountData},
     wechat::api::WeixinApiClient,
 };
 
@@ -9,7 +9,6 @@ use crate::{
 pub struct AccountSession {
     pub user_id: String,
     pub data: AccountData,
-    pub config: Option<AccountConfig>,
 }
 
 pub fn resolve_user_id(explicit: Option<&str>) -> Result<String> {
@@ -33,12 +32,10 @@ pub fn load_account(user_id: Option<&str>) -> Result<AccountSession> {
 
     let data = storage::get_account_data(&user_id)
         .with_context(|| format!("failed to load account data for `{user_id}`"))?;
-    let config = storage::get_account_config(&user_id);
 
     Ok(AccountSession {
         user_id,
         data,
-        config,
     })
 }
 
@@ -53,10 +50,7 @@ pub fn load_account_by_index(index: usize) -> Result<AccountSession> {
 pub fn build_client(session: &AccountSession) -> WeixinApiClient {
     WeixinApiClient::new(
         &session.data.token,
-        session
-            .config
-            .as_ref()
-            .and_then(|config| config.route_tag.clone()),
+        session.data.route_tag.clone(),
     )
 }
 
@@ -66,11 +60,9 @@ pub fn list_accounts() -> Result<Vec<AccountSession>> {
     for user_id in user_ids {
         let data = storage::get_account_data(&user_id)
             .with_context(|| format!("failed to load account data for `{user_id}`"))?;
-        let config = storage::get_account_config(&user_id);
         accounts.push(AccountSession {
             user_id,
             data,
-            config,
         });
     }
     Ok(accounts)
@@ -84,11 +76,7 @@ pub fn print_accounts() -> Result<()> {
     }
 
     for (index, entry) in accounts.into_iter().enumerate() {
-        let route_tag = entry
-            .config
-            .as_ref()
-            .and_then(|config| config.route_tag.as_deref())
-            .unwrap_or("-");
+        let route_tag = entry.data.route_tag.as_deref().unwrap_or("-");
         println!("account: {index}");
         println!("user_id: {}", entry.user_id);
         println!("bot_id: {}", entry.data.bot_id);
@@ -116,14 +104,9 @@ pub fn add_account(user_id: &str, bot_id: &str, token: &str, route_tag: Option<&
         saved_at: chrono::Utc::now().to_rfc3339(),
         bot_id: bot_id.to_string(),
         user_id: user_id.to_string(),
+        route_tag: route_tag.map(str::to_string),
     };
     storage::save_account_data(user_id, &data)?;
-    storage::save_account_config(
-        user_id,
-        &AccountConfig {
-            route_tag: route_tag.map(str::to_string),
-        },
-    )?;
 
     println!("saved account `{user_id}`");
     Ok(())

@@ -25,11 +25,7 @@ fn accounts_file_path() -> PathBuf {
     storage_root().join("accounts.json")
 }
 
-fn account_config_file_path(account_id: &str) -> PathBuf {
-    storage_root()
-        .join("config")
-        .join(format!("{account_id}.json"))
-}
+
 
 /// Persisted authentication credentials for a single `WeChat` account.
 #[derive(Debug, Serialize, Deserialize)]
@@ -45,13 +41,8 @@ pub struct AccountData {
     /// The iLink user ID associated with this account.
     #[serde(rename = "userId")]
     pub user_id: String,
-}
-
-/// Per-user configuration loaded from local storage.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AccountConfig {
     /// Optional routing tag sent as a header on every API request.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_tag: Option<String>,
 }
 
@@ -117,6 +108,7 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
             saved_at: data.saved_at.clone(),
             bot_id: data.bot_id.clone(),
             user_id: data.user_id.clone(),
+            route_tag: data.route_tag.clone(),
         };
     } else {
         accounts.accounts.push(AccountData {
@@ -124,26 +116,13 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
             saved_at: data.saved_at.clone(),
             bot_id: data.bot_id.clone(),
             user_id: data.user_id.clone(),
+            route_tag: data.route_tag.clone(),
         });
     }
     save_accounts_file(&accounts)
 }
 
-/// Loads the optional per-user configuration, returning `None` if absent.
-pub fn get_account_config(account_id: &str) -> Option<AccountConfig> {
-    let path = account_config_file_path(account_id);
-    let data = std::fs::read_to_string(&path).ok()?;
-    serde_json::from_str(&data).ok()
-}
 
-/// Saves optional per-user configuration to local storage.
-pub fn save_account_config(account_id: &str, config: &AccountConfig) -> Result<()> {
-    let path = account_config_file_path(account_id);
-    std::fs::create_dir_all(path.parent().unwrap()).context(IoSnafu)?;
-    let json = serde_json::to_string_pretty(config).context(JsonSnafu)?;
-    std::fs::write(&path, json).context(IoSnafu)?;
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
@@ -166,19 +145,23 @@ mod tests {
     }
 
     #[test]
-    fn test_account_config_serde() {
-        let config = AccountConfig {
+    fn test_account_data_with_route_tag() {
+        let data = AccountData {
+            token: "tok_abc".to_string(),
+            saved_at: "2025-01-01T00:00:00Z".to_string(),
+            bot_id: "bot_123".to_string(),
+            user_id: "user_123".to_string(),
             route_tag: Some("tag_xyz".to_string()),
         };
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized: AccountConfig = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&data).unwrap();
+        let deserialized: AccountData = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.route_tag, Some("tag_xyz".to_string()));
     }
 
     #[test]
-    fn test_account_config_default_route_tag() {
-        let json = r"{}";
-        let config: AccountConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.route_tag, None);
+    fn test_account_data_without_route_tag() {
+        let json = r#"{"token":"tok_abc","savedAt":"2025-01-01T00:00:00Z","botId":"bot_123","userId":"user_123"}"#;
+        let data: AccountData = serde_json::from_str(json).unwrap();
+        assert_eq!(data.route_tag, None);
     }
 }
