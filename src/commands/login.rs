@@ -1,5 +1,5 @@
 use snafu::OptionExt;
-use tracing::{info, warn};
+use log::{info, warn};
 
 use crate::{
     errors::{LoginFailedSnafu, QrCodeExpiredSnafu, Result},
