@@ -26,6 +26,12 @@ async fn main() -> AnyResult<()> {
         }
         Command::Account(args) => match args.command {
             AccountCommand::List => commands::account::print_accounts()?,
+            AccountCommand::Add(args) => commands::account::add_account(
+                &args.user_id,
+                &args.bot_id,
+                &args.token,
+                args.route_tag.as_deref(),
+            )?,
         },
         Command::GetContextToken(args) => {
             commands::get_context_token::run(args.user_id.as_deref()).await?;

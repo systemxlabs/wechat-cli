@@ -63,6 +63,7 @@ pub async fn login() -> Result<String> {
                     saved_at: chrono::Utc::now().to_rfc3339(),
                     bot_id: bot_id.to_string(),
                     user_id: user_id.to_string(),
+                    route_tag: None,
                 };
                 storage::save_account_data(&account_id, &account_data)?;
 
