@@ -4,112 +4,44 @@
 [![Crates.io](https://img.shields.io/crates/v/wechat-cli.svg)](https://crates.io/crates/wechat-cli)
 [![Docs](https://docs.rs/wechat-cli/badge.svg)](https://docs.rs/wechat-cli/latest/wechat_cli/)
 
-`wechat-cli` is a command-line client for the WeChat iLink Bot API.
+A command-line client for the WeChat iLink Bot API.
 
-It supports:
+## Features
 
-- QR code login
-- Non-interactive QR code retrieval and status polling for agents
-- Listing local accounts
-- Waiting for the next incoming message to print `context_token`
-- Sending text, images, and files
+- QR code login for interactive sessions
+- Non-interactive QR code retrieval and status polling for agent workflows
+- Add, list, and delete local accounts
+- Wait for the next incoming message to obtain a `context_token`
+- Send text, images, and files to WeChat users
 
-## Requirements
-
-- Rust
-- Access to `https://ilinkai.weixin.qq.com`
-- A WeChat client that can scan the login QR code
-
-## Install
+## Installation
 
 ```bash
 cargo install wechat-cli
 ```
 
-Install from the current repository checkout:
+## Usage
 
-```bash
-cargo install --path .
+```
+wechat-cli [COMMAND]
 ```
 
-## Quick Start
+### Login
 
-Login:
-
-```bash
-wechat-cli login
-```
-
-Request a login QR code as JSON without saving anything locally:
-
-```bash
-wechat-cli qrcode
-```
-
-Query a QR code status as JSON without saving anything locally:
-
-```bash
-wechat-cli qrcode-status --qrcode-id <qrcode_id>
-```
-
-List local accounts:
-
-```bash
-wechat-cli account list
-```
-
-Wait for the next incoming user message and print `context_token`:
-
-```bash
-wechat-cli get-context-token --user-id <user_id>
-```
-
-Send a text message:
-
-```bash
-wechat-cli send --user-id <user_id> --context-token <token> --text "hello"
-```
-
-Send a file:
-
-```bash
-wechat-cli send --user-id <user_id> --context-token <token> --file ./demo.pdf
-```
-
-Send an image:
-
-```bash
-wechat-cli send --user-id <user_id> --context-token <token> --file ./demo.png
-```
-
-Send an image or file with a caption:
-
-```bash
-wechat-cli send --user-id <user_id> --context-token <token> --file ./demo.png --caption "this is an image"
-```
-
-## Commands
-
-### `login`
+Interactive QR code login:
 
 ```bash
 wechat-cli login
 ```
 
-### `account list`
+Non-interactive QR code workflow for agents:
 
 ```bash
-wechat-cli account list
-```
-
-### `qrcode`
-
-```bash
+# Request a QR code
 wechat-cli qrcode
 ```
 
-Prints JSON like:
-
+Output:
 ```json
 {
   "qrcode_id": "...",
@@ -117,14 +49,12 @@ Prints JSON like:
 }
 ```
 
-### `qrcode-status`
-
 ```bash
+# Poll QR code status
 wechat-cli qrcode-status --qrcode-id <qrcode_id>
 ```
 
-Prints JSON like:
-
+Output:
 ```json
 {
   "qrcode_id": "...",
@@ -132,68 +62,112 @@ Prints JSON like:
 }
 ```
 
-When the QR code is confirmed, the JSON also includes:
+When confirmed:
+```json
+{
+  "qrcode_id": "...",
+  "status": "confirmed",
+  "bot_token": "...",
+  "bot_id": "...",
+  "user_id": "..."
+}
+```
 
-- `bot_token`
-- `bot_id`
-- `user_id`
+### Account
 
-### `get-context-token`
+List saved accounts:
+
+```bash
+wechat-cli account list
+```
+
+Add a new account:
+
+```bash
+wechat-cli account add \
+  --user-id <user_id> \
+  --bot-id <bot_id> \
+  --token <bot_token> \
+  [--route-tag <route_tag>]
+```
+
+Delete an account by index:
+
+```bash
+wechat-cli account delete --account <index>
+```
+
+Delete an account by user ID:
+
+```bash
+wechat-cli account delete --user-id <user_id>
+```
+
+### Send
+
+Send a text message:
+
+```bash
+wechat-cli send \
+  [--account <index> | --user-id <user_id>] \
+  --context-token <token> \
+  --text "hello"
+```
+
+Send an image:
+
+```bash
+wechat-cli send \
+  [--account <index> | --user-id <user_id>] \
+  --context-token <token> \
+  --file ./image.png
+```
+
+Send a file:
+
+```bash
+wechat-cli send \
+  [--account <index> | --user-id <user_id>] \
+  --context-token <token> \
+  --file ./document.pdf
+```
+
+Send a file with caption:
+
+```bash
+wechat-cli send \
+  [--account <index> | --user-id <user_id>] \
+  --context-token <token> \
+  --file ./image.png \
+  --caption "this is an image"
+```
+
+Use explicit credentials:
+
+```bash
+wechat-cli send \
+  --token <bot_token> \
+  --user-id <user_id> \
+  --context-token <token> \
+  [--route-tag <route_tag>] \
+  --text "hello"
+```
+
+### Get Context Token
+
+Wait for the next incoming message and print the `context_token`:
 
 ```bash
 wechat-cli get-context-token [--user-id <user_id>]
 ```
 
-### `send`
+## Account Selection Rules
 
-```bash
-wechat-cli send [OPTIONS] <--text <TEXT>|--file <FILE>>
-```
+For `send` command, the account is selected in this order:
 
-Options:
-
-- `--account <INDEX>`
-- `--user-id <USER_ID>`
-- `--token <TOKEN>`
-- `--route-tag <ROUTE_TAG>`
-- `--context-token <CONTEXT_TOKEN>` required
-- `--text <TEXT>`
-- `--file <FILE>`
-- `--caption <CAPTION>`
-
-Rules:
-
-- `--account <index>` selects a saved account
-- if `--account` and `--user-id` are both omitted, saved account index `0` is used
-- `--token` switches `send` into explicit credential mode
-- `--text` and `--file` are mutually exclusive
-- `--caption` can only be used with `--file`
-- Image files are sent as image messages automatically
-- Other files are sent as file messages
-
-## Workflow
-
-Recommended flow:
-
-1. Run `login`
-2. Run `get-context-token --user-id <user_id>`
-3. Send one message from the bound WeChat user to the bot
-4. Copy the printed token
-5. Run `send --context-token <token>`
-
-Example:
-
-```bash
-wechat-cli send --account 0 --context-token <token> --text "hello"
-```
-
-Non-interactive agent flow:
-
-1. Run `qrcode`
-2. Show `qrcode_url` to the human or render it elsewhere
-3. Poll `qrcode-status --qrcode-id <qrcode_id>`
-4. When `status` becomes `confirmed`, read `bot_token`, `bot_id`, and `user_id` from stdout
-5. Use those credentials directly, or run interactive `login` if you want local persistence
+1. `--account <index>` - explicit account index
+2. `--user-id <user_id>` - explicit user ID
+3. default saved account index `0`
 
 ## IDs
 
@@ -202,22 +176,17 @@ Non-interactive agent flow:
 - Re-login for the same `user_id` changes the bound `bot_id`
 - The bot can only send messages to its currently bound `user_id`
 
-Message direction:
-
-- user -> bot: `from_user_id = user_id`, `to_user_id = bot_id`
-- bot -> user: `to_user_id = user_id`
-
 ## Storage
 
 Local files are stored under:
 
-```text
+```
 ~/.config/wechat-cli/
 ```
 
-Main files:
+Main file:
 
-```text
+```
 ~/.config/wechat-cli/accounts.json
 ```
 
@@ -225,9 +194,7 @@ Notes:
 
 - `accounts.json` stores all accounts
 - `context_token` is not stored locally
-- `get_updates_buf` is not stored locally
 - `qrcode` and `qrcode-status` do not update local files
-- Old storage layouts are not read for compatibility
 
 ## Limitations
 
