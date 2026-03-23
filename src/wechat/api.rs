@@ -35,10 +35,6 @@ fn generate_client_id() -> String {
     format!("weixin-agent-{}", Uuid::new_v4().simple())
 }
 
-/// HTTP client wrapper for the `WeChat` iLink Bot API.
-///
-/// Handles authentication headers, request signing, and automatic
-/// session-expiry detection on every response.
 pub struct WeixinApiClient {
     client: Client,
     base_url: String,
@@ -47,8 +43,6 @@ pub struct WeixinApiClient {
 }
 
 impl WeixinApiClient {
-    /// Creates a new API client targeting `base_url` with the given bearer
-    /// `token`.
     pub fn new(base_url: &str, token: &str, route_tag: Option<String>) -> Self {
         Self {
             client: build_http_client(),
@@ -176,7 +170,6 @@ impl WeixinApiClient {
         Ok(resp)
     }
 
-    /// Requests a new login QR code from the API.
     pub async fn fetch_qr_code(&self) -> Result<Value> {
         self.post_form_with_timeout(
             "ilink/bot/get_bot_qrcode",
@@ -186,7 +179,6 @@ impl WeixinApiClient {
         .await
     }
 
-    /// Polls the current scan status for the given `qrcode_id`.
     pub async fn get_qr_code_status(&self, qrcode_id: &str) -> Result<Value> {
         self.post_form_with_timeout(
             "ilink/bot/get_qrcode_status",
@@ -196,7 +188,6 @@ impl WeixinApiClient {
         .await
     }
 
-    /// Long-polls for new incoming messages, optionally resuming from `buf`.
     pub async fn get_updates(&self, buf: Option<&str>) -> Result<Value> {
         let mut body = serde_json::json!({
             "base_info": build_base_info(),
@@ -208,7 +199,6 @@ impl WeixinApiClient {
             .await
     }
 
-    /// Sends a plain-text message to `to_user_id`.
     pub async fn send_text_message(
         &self,
         to_user_id: &str,
@@ -235,7 +225,6 @@ impl WeixinApiClient {
         self.post("ilink/bot/sendmessage", &body).await
     }
 
-    /// Sends a media message (image, video, or file) to `to_user_id`.
     pub async fn send_media_message(
         &self,
         to_user_id: &str,
@@ -260,7 +249,7 @@ impl WeixinApiClient {
         });
         self.post("ilink/bot/sendmessage", &body).await
     }
-    /// Requests upload metadata for an outbound media item.
+
     pub async fn get_upload_url(&self, payload: &Value) -> Result<Value> {
         let mut body = payload.clone();
         body["base_info"] = build_base_info();

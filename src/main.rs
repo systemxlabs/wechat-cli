@@ -1,20 +1,15 @@
-mod account;
-mod api;
-mod bot;
 mod cli;
-mod context;
+mod commands;
 mod errors;
-mod media;
-mod send;
 mod storage;
-mod watch;
+mod wechat;
 
 pub use errors::{Error, Result};
 
-use crate::bot::{LoginOptions, login};
 use anyhow::Result as AnyResult;
 use clap::Parser;
 use cli::{AccountCommand, Cli, Command};
+use commands::login::{LoginOptions, login};
 
 #[tokio::main]
 async fn main() -> AnyResult<()> {
@@ -30,13 +25,13 @@ async fn main() -> AnyResult<()> {
             println!("logged in as user `{user_id}`");
         }
         Command::Account(args) => match args.command {
-            AccountCommand::List => print_accounts()?,
+            AccountCommand::List => commands::account::print_accounts()?,
         },
         Command::GetContextToken(args) => {
-            watch::get_context_token(args.user_id.as_deref()).await?;
+            commands::get_context_token::run(args.user_id.as_deref()).await?;
         }
         Command::Send(args) => {
-            send::send(
+            commands::send::run(
                 args.user_id.as_deref(),
                 args.context_token.as_deref(),
                 args.text.as_deref(),
@@ -58,28 +53,4 @@ fn init_tracing() {
         )
         .with_target(false)
         .try_init();
-}
-
-fn print_accounts() -> AnyResult<()> {
-    let accounts = account::list_accounts()?;
-    if accounts.is_empty() {
-        println!("no saved users");
-        return Ok(());
-    }
-
-    for entry in accounts {
-        let route_tag = entry
-            .config
-            .as_ref()
-            .and_then(|config| config.route_tag.as_deref())
-            .unwrap_or("-");
-        println!("user_id: {}", entry.user_id);
-        println!("bot_id: {}", entry.data.bot_id);
-        println!("base_url: {}", entry.data.base_url);
-        println!("saved_at: {}", entry.data.saved_at);
-        println!("route_tag: {route_tag}");
-        println!();
-    }
-
-    Ok(())
 }

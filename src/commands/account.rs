@@ -1,8 +1,8 @@
 use anyhow::{Context, Result, anyhow, bail};
 
 use crate::{
-    api::WeixinApiClient,
     storage::{self, AccountConfig, AccountData},
+    wechat::api::WeixinApiClient,
 };
 
 #[derive(Debug)]
@@ -67,4 +67,28 @@ pub fn list_accounts() -> Result<Vec<AccountSession>> {
         });
     }
     Ok(accounts)
+}
+
+pub fn print_accounts() -> Result<()> {
+    let accounts = list_accounts()?;
+    if accounts.is_empty() {
+        println!("no saved users");
+        return Ok(());
+    }
+
+    for entry in accounts {
+        let route_tag = entry
+            .config
+            .as_ref()
+            .and_then(|config| config.route_tag.as_deref())
+            .unwrap_or("-");
+        println!("user_id: {}", entry.user_id);
+        println!("bot_id: {}", entry.data.bot_id);
+        println!("base_url: {}", entry.data.base_url);
+        println!("saved_at: {}", entry.data.saved_at);
+        println!("route_tag: {route_tag}");
+        println!();
+    }
+
+    Ok(())
 }

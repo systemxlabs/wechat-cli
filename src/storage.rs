@@ -17,7 +17,7 @@ pub const CDN_BASE_URL: &str = "https://novac2c.cdn.weixin.qq.com/c2c";
 fn storage_root() -> PathBuf {
     dirs::home_dir()
         .expect("no home directory")
-        .join(".cache")
+        .join(".config")
         .join("wechat-cli")
 }
 
@@ -126,24 +126,6 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
         });
     }
     save_accounts_file(&accounts)
-}
-
-/// Returns the saved long-poll continuation buffer for the given stable user ID.
-pub fn get_updates_buf(account_id: &str) -> Option<String> {
-    let path = storage_root()
-        .join("get_updates_buf")
-        .join(format!("{account_id}.txt"));
-    std::fs::read_to_string(&path).ok()
-}
-
-/// Saves the long-poll continuation buffer for the given stable user ID.
-pub fn save_updates_buf(account_id: &str, buf: &str) -> Result<()> {
-    let path = storage_root()
-        .join("get_updates_buf")
-        .join(format!("{account_id}.txt"));
-    std::fs::create_dir_all(path.parent().unwrap()).context(IoSnafu)?;
-    std::fs::write(&path, buf).context(IoSnafu)?;
-    Ok(())
 }
 
 /// Loads the optional per-user configuration, returning `None` if absent.

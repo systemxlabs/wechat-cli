@@ -1,12 +1,16 @@
 # wechat-cli
 
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+[![Crates.io](https://img.shields.io/crates/v/wechat-cli.svg)](https://crates.io/crates/wechat-cli)
+[![Docs](https://docs.rs/wechat-cli/badge.svg)](https://docs.rs/wechat-cli/latest/wechat_cli/)
+
 `wechat-cli` is a command-line client for the WeChat iLink Bot API.
 
 It supports:
 
 - QR code login
 - Listing local accounts
-- Waiting for the next incoming message to fetch `context_token`
+- Waiting for the next incoming message to print `context_token`
 - Sending text, images, and files
 
 ## Requirements
@@ -50,25 +54,25 @@ wechat-cli get-context-token --user-id <user_id>
 Send a text message:
 
 ```bash
-wechat-cli send --user-id <user_id> --text "hello"
+wechat-cli send --user-id <user_id> --context-token <token> --text "hello"
 ```
 
 Send a file:
 
 ```bash
-wechat-cli send --user-id <user_id> --file ./demo.pdf
+wechat-cli send --user-id <user_id> --context-token <token> --file ./demo.pdf
 ```
 
 Send an image:
 
 ```bash
-wechat-cli send --user-id <user_id> --file ./demo.png
+wechat-cli send --user-id <user_id> --context-token <token> --file ./demo.png
 ```
 
 Send an image or file with a caption:
 
 ```bash
-wechat-cli send --user-id <user_id> --file ./demo.png --caption "this is an image"
+wechat-cli send --user-id <user_id> --context-token <token> --file ./demo.png --caption "this is an image"
 ```
 
 ## Commands
@@ -106,7 +110,7 @@ wechat-cli send [OPTIONS] <--text <TEXT>|--file <FILE>>
 Options:
 
 - `--user-id <USER_ID>`
-- `--context-token <CONTEXT_TOKEN>`
+- `--context-token <CONTEXT_TOKEN>` required
 - `--text <TEXT>`
 - `--file <FILE>`
 - `--caption <CAPTION>`
@@ -125,9 +129,10 @@ Recommended flow:
 1. Run `login`
 2. Run `get-context-token --user-id <user_id>`
 3. Send one message from the bound WeChat user to the bot
-4. Run `send`
+4. Copy the printed token
+5. Run `send --context-token <token>`
 
-If no cached `context_token` is available, pass it explicitly:
+Example:
 
 ```bash
 wechat-cli send --user-id <user_id> --context-token <token> --text "hello"
@@ -150,26 +155,25 @@ Message direction:
 Local files are stored under:
 
 ```text
-~/.cache/wechat-cli/
+~/.config/wechat-cli/
 ```
 
 Main files:
 
 ```text
-~/.cache/wechat-cli/accounts.json
-~/.cache/wechat-cli/get_updates_buf/<user_id>.txt
-~/.cache/wechat-cli/contexts/<user_id>.json
+~/.config/wechat-cli/accounts.json
 ```
 
 Notes:
 
 - `accounts.json` stores all accounts
-- `contexts/<user_id>.json` stores the most recent session `context_token`
+- `context_token` is not stored locally
+- `get_updates_buf` is not stored locally
 - Old storage layouts are not read for compatibility
 
 ## Limitations
 
-- Sending requires a valid session `context_token`
+- Sending requires explicitly passing a valid `--context-token`
 - If the server returns `Session expired`, you must log in again
 - The bot cannot proactively message arbitrary users
 - Voice and video sending are not supported yet

@@ -2,22 +2,16 @@ use snafu::OptionExt;
 use tracing::{info, warn};
 
 use crate::{
-    api::WeixinApiClient,
     errors::{LoginFailedSnafu, QrCodeExpiredSnafu, Result},
     storage::{self, DEFAULT_BASE_URL},
+    wechat::api::WeixinApiClient,
 };
 
-/// Options for the QR-code login flow.
 #[derive(Debug, Clone, Default)]
 pub struct LoginOptions {
-    /// Override the default API base URL.
     pub base_url: Option<String>,
 }
 
-/// Performs an interactive QR-code login and persists the resulting
-/// credentials.
-///
-/// Returns the stable user ID on success.
 pub async fn login(options: LoginOptions) -> Result<String> {
     let base_url = options.base_url.as_deref().unwrap_or(DEFAULT_BASE_URL);
     let client = WeixinApiClient::new(base_url, "", None);

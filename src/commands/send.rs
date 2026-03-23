@@ -4,12 +4,11 @@ use anyhow::{Context, Result, bail};
 use mime_guess::mime;
 
 use crate::{
-    account::{build_client, load_account},
-    context,
-    media::{OutboundMediaKind, build_media_item, upload_media},
+    commands::account::{build_client, load_account},
+    wechat::media::{OutboundMediaKind, build_media_item, upload_media},
 };
 
-pub async fn send(
+pub async fn run(
     user_id: Option<&str>,
     context_token: Option<&str>,
     text: Option<&str>,
@@ -27,7 +26,7 @@ pub async fn send(
 async fn send_text(user_id: Option<&str>, context_token: Option<&str>, text: &str) -> Result<()> {
     let session = load_account(user_id)?;
     let target_user_id = &session.data.user_id;
-    let context_token = resolve_context_token(&session.user_id, context_token)?;
+    let context_token = require_context_token(&session.user_id, context_token)?;
     let client = build_client(&session);
     client
         .send_text_message(target_user_id, &context_token, text)
@@ -52,7 +51,7 @@ async fn send_media(
 
     let session = load_account(user_id)?;
     let target_user_id = &session.data.user_id;
-    let context_token = resolve_context_token(&session.user_id, context_token)?;
+    let context_token = require_context_token(&session.user_id, context_token)?;
     let client = build_client(&session);
 
     let media_kind = detect_media_kind(file_path);
@@ -86,18 +85,12 @@ fn detect_media_kind(file_path: &Path) -> OutboundMediaKind {
     }
 }
 
-fn resolve_context_token(user_id: &str, explicit: Option<&str>) -> Result<String> {
+fn require_context_token(user_id: &str, explicit: Option<&str>) -> Result<String> {
     if let Some(context_token) = explicit {
         return Ok(context_token.to_string());
     }
 
-    if let Some(cached) = context::get_primary_context(user_id).with_context(|| {
-        format!("failed to load cached context for bound user under `{user_id}`")
-    })? {
-        return Ok(cached.context_token);
-    }
-
     bail!(
-        "no cached context_token for bound user under `{user_id}`; run `wechat-cli get-context-token --user-id {user_id}` first or pass `--context-token`"
+        "missing `--context-token` for bound user `{user_id}`; run `wechat-cli get-context-token --user-id {user_id}` and pass the printed token"
     )
 }

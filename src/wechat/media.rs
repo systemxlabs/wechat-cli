@@ -9,10 +9,11 @@ use serde_json::Value;
 use snafu::ResultExt;
 
 use crate::{
-    api::{WeixinApiClient, build_http_client},
     errors::{ApiSnafu, HttpSnafu, IoSnafu},
     storage::CDN_BASE_URL,
 };
+
+use super::api::{WeixinApiClient, build_http_client};
 
 type Aes128EcbEnc = ecb::Encryptor<Aes128>;
 
@@ -36,15 +37,11 @@ pub enum OutboundMediaKind {
     File,
 }
 
-/// Encrypts `data` using AES-128 in ECB mode with PKCS7 padding.
 pub fn encrypt_aes_ecb(key: &[u8; 16], data: &[u8]) -> Vec<u8> {
     let enc = Aes128EcbEnc::new(key.into());
     enc.encrypt_padded_vec_mut::<Pkcs7>(data)
 }
 
-/// Encrypts and uploads a local file to the `WeChat` CDN.
-///
-/// Returns the metadata needed to reference the uploaded file in a message.
 pub async fn upload_media(
     api_client: &WeixinApiClient,
     to_user_id: &str,
