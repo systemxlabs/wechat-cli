@@ -46,8 +46,6 @@ pub struct QrCodeStatusResponse {
     pub ilink_bot_id: Option<String>,
     #[serde(default)]
     pub ilink_user_id: Option<String>,
-    #[serde(default)]
-    pub baseurl: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,8 +62,6 @@ pub struct QrCodeData {
     pub ilink_bot_id: Option<String>,
     #[serde(default)]
     pub ilink_user_id: Option<String>,
-    #[serde(default)]
-    pub baseurl: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -349,13 +345,6 @@ impl QrCodeStatusResponse {
             .as_ref()
             .and_then(|data| data.ilink_user_id.as_deref())
             .or(self.ilink_user_id.as_deref())
-    }
-
-    pub fn base_url(&self) -> Option<&str> {
-        self.data
-            .as_ref()
-            .and_then(|data| data.baseurl.as_deref())
-            .or(self.baseurl.as_deref())
     }
 }
 

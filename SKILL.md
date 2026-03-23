@@ -1,6 +1,6 @@
 ---
 name: wechat-cli
-description: Use the `wechat-cli` command-line tool to log in to WeChat iLink Bot, inspect saved accounts, wait for an inbound message to obtain a `context_token`, and send text, image, or file messages. Trigger this skill when a task requires operating the local `wechat-cli` binary instead of editing its source code.
+description: Use the `wechat-cli` command-line tool to request login QR codes, poll QR-code status for non-interactive agent flows, inspect saved accounts, wait for an inbound message to obtain a `context_token`, and send text, image, or file messages. Trigger this skill when a task requires operating the local `wechat-cli` binary instead of editing its source code.
 ---
 
 # wechat-cli
@@ -15,8 +15,8 @@ Use this skill when the task is to operate the local `wechat-cli` program.
   `wechat-cli`
 - Network access to `https://ilinkai.weixin.qq.com` is required.
 - A valid send operation requires:
-  - one logged-in bot account
-  - the bound `user_id`
+  - either one saved bot account or explicit credentials
+  - the target `user_id`
   - a fresh `context_token`
 
 ## Identity Model
@@ -32,31 +32,46 @@ Message direction:
 - user -> bot: `from_user_id = user_id`, `to_user_id = bot_id`
 - bot -> user: `to_user_id = user_id`
 
-## Main Workflow
+## Non-Interactive Login Workflow
 
-1. Run login:
-   `wechat-cli login`
-2. List saved accounts if needed:
-   `wechat-cli account list`
-3. Obtain a `context_token` by waiting for the next inbound message:
-   `wechat-cli get-context-token --user-id <user_id>`
-4. Ask the human to send one message from the bound WeChat user to the bot.
-5. Copy the printed `context_token`.
-6. Send a reply using that token.
+1. Request a QR code:
+   `wechat-cli qrcode`
+2. Read `qrcode_id` and `qrcode_url` from the JSON output.
+3. Show the QR code to the human outside the CLI.
+4. Poll status:
+   `wechat-cli qrcode-status --qrcode-id <qrcode_id>`
+5. When `status` becomes `confirmed`, read `bot_token`, `bot_id`, and `user_id` from the JSON output.
+6. Use those credentials directly. These commands do not save anything locally.
 
 ## Commands
 
-### Login
+### Request QR Code
 
 ```
-wechat-cli login
+wechat-cli qrcode
 ```
 
-Optional custom base URL:
+This prints JSON with:
+
+- `qrcode_id`
+- `qrcode_url`
+
+### Query QR Code Status
 
 ```
-wechat-cli login --base-url <base_url>
+wechat-cli qrcode-status --qrcode-id <qrcode_id>
 ```
+
+This prints JSON with:
+
+- `qrcode_id`
+- `status`
+
+When confirmed, it also includes:
+
+- `bot_token`
+- `bot_id`
+- `user_id`
 
 ### List Accounts
 
@@ -64,7 +79,7 @@ wechat-cli login --base-url <base_url>
 wechat-cli account list
 ```
 
-Use this to find saved account indexes and inspect `user_id`, `bot_id`, and `base_url`.
+Use this to find saved account indexes and inspect `user_id` and `bot_id`.
 
 ### Get Context Token
 
@@ -134,12 +149,7 @@ Required flags:
 
 Optional flags:
 
-- `--base-url <base_url>`
 - `--route-tag <route_tag>`
-
-Default base URL:
-
-- `https://ilinkai.weixin.qq.com`
 
 Example:
 
@@ -155,7 +165,7 @@ wechat-cli send --token <bot_token> --user-id <user_id> --context-token <token> 
 - Image files are sent as image messages automatically.
 - Non-image files are sent as file messages.
 - Do not assume a previously seen `bot_id` is still valid after re-login.
-- If the server reports session expiration, log in again.
+- If the server reports session expiration, obtain fresh credentials again.
 
 ## Local Storage
 
@@ -168,6 +178,8 @@ Stored locally:
 
 Not stored locally:
 
+- `qrcode` output
+- `qrcode-status` output
 - `context_token`
 - `get_updates_buf`
 
@@ -177,7 +189,8 @@ Use built-in help before guessing flags:
 
 ```
 wechat-cli --help
-wechat-cli login --help
+wechat-cli qrcode --help
+wechat-cli qrcode-status --help
 wechat-cli account --help
 wechat-cli get-context-token --help
 wechat-cli send --help

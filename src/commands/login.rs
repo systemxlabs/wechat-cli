@@ -3,20 +3,25 @@ use tracing::{info, warn};
 
 use crate::{
     errors::{LoginFailedSnafu, QrCodeExpiredSnafu, Result},
-    storage::{self, DEFAULT_BASE_URL},
-    wechat::api::WeixinApiClient,
+    storage,
+    wechat::{
+        api::WeixinApiClient,
+        models::{FetchQrCodeResponse, QrCodeStatusResponse},
+    },
 };
 
-#[derive(Debug, Clone, Default)]
-pub struct LoginOptions {
-    pub base_url: Option<String>,
+pub async fn fetch_qrcode() -> Result<FetchQrCodeResponse> {
+    let client = WeixinApiClient::new("", None);
+    client.fetch_qr_code().await
 }
 
-pub async fn login(options: LoginOptions) -> Result<String> {
-    let base_url = options.base_url.as_deref().unwrap_or(DEFAULT_BASE_URL);
-    let client = WeixinApiClient::new(base_url, "", None);
+pub async fn fetch_qrcode_status(qrcode_id: &str) -> Result<QrCodeStatusResponse> {
+    let client = WeixinApiClient::new("", None);
+    client.get_qr_code_status(qrcode_id).await
+}
 
-    let qr_resp = client.fetch_qr_code().await?;
+pub async fn login() -> Result<String> {
+    let qr_resp = fetch_qrcode().await?;
     let qrcode_url = qr_resp.qrcode_url().context(LoginFailedSnafu {
         reason: "no qrcode_url",
     })?;
@@ -40,7 +45,7 @@ pub async fn login(options: LoginOptions) -> Result<String> {
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        let status_resp = client.get_qr_code_status(qrcode_id).await?;
+        let status_resp = fetch_qrcode_status(qrcode_id).await?;
 
         match status_resp.status() {
             "wait" => {}
@@ -60,13 +65,11 @@ pub async fn login(options: LoginOptions) -> Result<String> {
                 let user_id = status_resp.ilink_user_id().context(LoginFailedSnafu {
                     reason: "no ilink_user_id",
                 })?;
-                let base = status_resp.base_url().unwrap_or(base_url);
                 let account_id = user_id.to_string();
 
                 let account_data = storage::AccountData {
                     token: token.to_string(),
                     saved_at: chrono::Utc::now().to_rfc3339(),
-                    base_url: base.to_string(),
                     bot_id: bot_id.to_string(),
                     user_id: user_id.to_string(),
                 };

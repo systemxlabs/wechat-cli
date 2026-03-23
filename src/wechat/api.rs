@@ -7,6 +7,7 @@ use serde::de::DeserializeOwned;
 use snafu::ResultExt;
 
 use crate::errors::{ApiSnafu, HttpSnafu, JsonSnafu, Result, SessionExpiredSnafu};
+use crate::storage::ILINK_API_ROOT;
 
 use super::models::{
     EmptyResponse, FetchQrCodeResponse, GetUpdatesRequest, GetUpdatesResponse,
@@ -41,16 +42,14 @@ fn random_wechat_uin() -> String {
 
 pub struct WeixinApiClient {
     client: Client,
-    base_url: String,
     token: String,
     route_tag: Option<String>,
 }
 
 impl WeixinApiClient {
-    pub fn new(base_url: &str, token: &str, route_tag: Option<String>) -> Self {
+    pub fn new(token: &str, route_tag: Option<String>) -> Self {
         Self {
             client: build_http_client(),
-            base_url: base_url.trim_end_matches('/').to_string(),
             token: token.to_string(),
             route_tag,
         }
@@ -98,7 +97,7 @@ impl WeixinApiClient {
         TReq: Serialize + ?Sized,
         TResp: DeserializeOwned,
     {
-        let url = format!("{}/{}", self.base_url, path);
+        let url = format!("{}/{}", ILINK_API_ROOT, path);
         let body_bytes = serde_json::to_vec(body).context(JsonSnafu)?;
         let response_bytes = self
             .client
@@ -125,7 +124,7 @@ impl WeixinApiClient {
     where
         TResp: DeserializeOwned,
     {
-        let url = format!("{}/{}", self.base_url, path);
+        let url = format!("{}/{}", ILINK_API_ROOT, path);
         let response_bytes = self
             .client
             .post(&url)
@@ -254,8 +253,7 @@ mod tests {
 
     #[test]
     fn test_client_new() {
-        let client = WeixinApiClient::new("https://example.com/", "tok_123", None);
-        assert_eq!(client.base_url, "https://example.com");
+        let client = WeixinApiClient::new("tok_123", None);
         assert_eq!(client.token, "tok_123");
         assert!(client.route_tag.is_none());
     }

@@ -52,7 +52,6 @@ pub fn load_account_by_index(index: usize) -> Result<AccountSession> {
 
 pub fn build_client(session: &AccountSession) -> WeixinApiClient {
     WeixinApiClient::new(
-        &session.data.base_url,
         &session.data.token,
         session
             .config
@@ -93,7 +92,6 @@ pub fn print_accounts() -> Result<()> {
         println!("account: {index}");
         println!("user_id: {}", entry.user_id);
         println!("bot_id: {}", entry.data.bot_id);
-        println!("base_url: {}", entry.data.base_url);
         println!("saved_at: {}", entry.data.saved_at);
         println!("route_tag: {route_tag}");
         println!();

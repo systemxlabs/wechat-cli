@@ -9,6 +9,7 @@
 It supports:
 
 - QR code login
+- Non-interactive QR code retrieval and status polling for agents
 - Listing local accounts
 - Waiting for the next incoming message to print `context_token`
 - Sending text, images, and files
@@ -37,6 +38,18 @@ Login:
 
 ```bash
 wechat-cli login
+```
+
+Request a login QR code as JSON without saving anything locally:
+
+```bash
+wechat-cli qrcode
+```
+
+Query a QR code status as JSON without saving anything locally:
+
+```bash
+wechat-cli qrcode-status --qrcode-id <qrcode_id>
 ```
 
 List local accounts:
@@ -80,13 +93,7 @@ wechat-cli send --user-id <user_id> --context-token <token> --file ./demo.png --
 ### `login`
 
 ```bash
-wechat-cli login [--base-url <base_url>]
-```
-
-Default `base_url`:
-
-```text
-https://ilinkai.weixin.qq.com
+wechat-cli login
 ```
 
 ### `account list`
@@ -94,6 +101,42 @@ https://ilinkai.weixin.qq.com
 ```bash
 wechat-cli account list
 ```
+
+### `qrcode`
+
+```bash
+wechat-cli qrcode
+```
+
+Prints JSON like:
+
+```json
+{
+  "qrcode_id": "...",
+  "qrcode_url": "..."
+}
+```
+
+### `qrcode-status`
+
+```bash
+wechat-cli qrcode-status --qrcode-id <qrcode_id>
+```
+
+Prints JSON like:
+
+```json
+{
+  "qrcode_id": "...",
+  "status": "wait"
+}
+```
+
+When the QR code is confirmed, the JSON also includes:
+
+- `bot_token`
+- `bot_id`
+- `user_id`
 
 ### `get-context-token`
 
@@ -112,7 +155,6 @@ Options:
 - `--account <INDEX>`
 - `--user-id <USER_ID>`
 - `--token <TOKEN>`
-- `--base-url <BASE_URL>` optional in explicit credential mode
 - `--route-tag <ROUTE_TAG>`
 - `--context-token <CONTEXT_TOKEN>` required
 - `--text <TEXT>`
@@ -124,7 +166,6 @@ Rules:
 - `--account <index>` selects a saved account
 - if `--account` and `--user-id` are both omitted, saved account index `0` is used
 - `--token` switches `send` into explicit credential mode
-- in explicit credential mode, `--user-id` is required and `--base-url` defaults to `https://ilinkai.weixin.qq.com`
 - `--text` and `--file` are mutually exclusive
 - `--caption` can only be used with `--file`
 - Image files are sent as image messages automatically
@@ -145,6 +186,14 @@ Example:
 ```bash
 wechat-cli send --account 0 --context-token <token> --text "hello"
 ```
+
+Non-interactive agent flow:
+
+1. Run `qrcode`
+2. Show `qrcode_url` to the human or render it elsewhere
+3. Poll `qrcode-status --qrcode-id <qrcode_id>`
+4. When `status` becomes `confirmed`, read `bot_token`, `bot_id`, and `user_id` from stdout
+5. Use those credentials directly, or run interactive `login` if you want local persistence
 
 ## IDs
 
@@ -177,6 +226,7 @@ Notes:
 - `accounts.json` stores all accounts
 - `context_token` is not stored locally
 - `get_updates_buf` is not stored locally
+- `qrcode` and `qrcode-status` do not update local files
 - Old storage layouts are not read for compatibility
 
 ## Limitations
@@ -191,6 +241,8 @@ Notes:
 ```bash
 wechat-cli --help
 wechat-cli login --help
+wechat-cli qrcode --help
+wechat-cli qrcode-status --help
 wechat-cli account --help
 wechat-cli get-context-token --help
 wechat-cli send --help

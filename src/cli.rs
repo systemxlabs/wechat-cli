@@ -14,6 +14,10 @@ pub struct Cli {
 pub enum Command {
     /// Log in with a QR code and save the account locally.
     Login(LoginArgs),
+    /// Request a login QR code and print it as JSON without saving anything locally.
+    Qrcode(QrcodeArgs),
+    /// Query a login QR code status and print it as JSON without saving anything locally.
+    QrcodeStatus(QrcodeStatusArgs),
     /// Inspect saved accounts.
     Account(AccountArgs),
     /// Wait for the next inbound message and print its context token.
@@ -23,10 +27,16 @@ pub enum Command {
 }
 
 #[derive(Debug, Args)]
-pub struct LoginArgs {
-    /// Override the default iLink API base URL.
+pub struct LoginArgs {}
+
+#[derive(Debug, Args)]
+pub struct QrcodeArgs {}
+
+#[derive(Debug, Args)]
+pub struct QrcodeStatusArgs {
+    /// QR code ID returned by `wechat-cli qrcode`.
     #[arg(long)]
-    pub base_url: Option<String>,
+    pub qrcode_id: String,
 }
 
 #[derive(Debug, Args)]
@@ -62,12 +72,11 @@ pub struct GetContextTokenArgs {
   3. default saved account index 0 if neither is provided
 
 Explicit credentials mode:
-  --token <token> [--base-url <base_url>] --user-id <user_id> [--route-tag <route_tag>]
+  --token <token> --user-id <user_id> [--route-tag <route_tag>]
 
 Rules:
   --account and --user-id cannot be used together in saved account mode
   --account cannot be used with explicit credential flags
-  --base-url defaults to https://ilinkai.weixin.qq.com in explicit credential mode
   --context-token is always required and is never read from local cache"
 )]
 pub struct SendArgs {
@@ -75,10 +84,8 @@ pub struct SendArgs {
     pub account: Option<usize>,
     #[arg(long, help = "Saved account user ID, or the target user ID when using explicit credentials")]
     pub user_id: Option<String>,
-    #[arg(long, help = "Explicit bot token. Requires `--user-id`. `--base-url` is optional")]
+    #[arg(long, help = "Explicit bot token. Requires `--user-id`")]
     pub token: Option<String>,
-    #[arg(long, help = "Explicit API base URL. Defaults to `https://ilinkai.weixin.qq.com` when `--token` is used")]
-    pub base_url: Option<String>,
     #[arg(long, help = "Optional explicit route tag header used with explicit credentials")]
     pub route_tag: Option<String>,
     #[arg(long, help = "Context token printed by `get-context-token`. Always required for sending")]

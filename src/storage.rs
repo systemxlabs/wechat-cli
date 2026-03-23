@@ -8,8 +8,8 @@ use crate::{
     errors::{IoSnafu, JsonSnafu},
 };
 
-/// Default `WeChat` iLink API base URL.
-pub const DEFAULT_BASE_URL: &str = "https://ilinkai.weixin.qq.com";
+/// Fixed `WeChat` iLink API root.
+pub const ILINK_API_ROOT: &str = "https://ilinkai.weixin.qq.com";
 
 /// Base URL for downloading encrypted media from the `WeChat` CDN.
 pub const CDN_BASE_URL: &str = "https://novac2c.cdn.weixin.qq.com/c2c";
@@ -33,9 +33,6 @@ pub struct AccountData {
     /// ISO-8601 timestamp of when this data was saved.
     #[serde(rename = "savedAt")]
     pub saved_at: String,
-    /// API base URL for this account.
-    #[serde(rename = "baseUrl")]
-    pub base_url: String,
     /// The current iLink bot ID associated with this login session.
     #[serde(rename = "botId")]
     pub bot_id: String,
@@ -112,7 +109,6 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
         *existing = AccountData {
             token: data.token.clone(),
             saved_at: data.saved_at.clone(),
-            base_url: data.base_url.clone(),
             bot_id: data.bot_id.clone(),
             user_id: data.user_id.clone(),
         };
@@ -120,7 +116,6 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
         accounts.accounts.push(AccountData {
             token: data.token.clone(),
             saved_at: data.saved_at.clone(),
-            base_url: data.base_url.clone(),
             bot_id: data.bot_id.clone(),
             user_id: data.user_id.clone(),
         });
@@ -146,7 +141,6 @@ mod tests {
         let data = AccountData {
             token: "tok_abc".to_string(),
             saved_at: "2025-01-01T00:00:00Z".to_string(),
-            base_url: "https://example.com".to_string(),
             bot_id: "bot_123".to_string(),
             user_id: "user_123".to_string(),
         };
@@ -154,7 +148,6 @@ mod tests {
         let deserialized: AccountData = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.token, data.token);
         assert_eq!(deserialized.saved_at, data.saved_at);
-        assert_eq!(deserialized.base_url, data.base_url);
         assert_eq!(deserialized.bot_id, data.bot_id);
         assert_eq!(deserialized.user_id, data.user_id);
     }

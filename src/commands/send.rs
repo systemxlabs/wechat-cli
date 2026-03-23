@@ -5,7 +5,6 @@ use mime_guess::mime;
 
 use crate::{
     commands::account::{AccountSession, build_client, load_account, load_account_by_index},
-    storage::DEFAULT_BASE_URL,
     wechat::api::WeixinApiClient,
     wechat::media::{OutboundMediaKind, build_media_item, upload_media},
 };
@@ -14,14 +13,13 @@ pub async fn run(
     account: Option<usize>,
     user_id: Option<&str>,
     token: Option<&str>,
-    base_url: Option<&str>,
     route_tag: Option<&str>,
     context_token: Option<&str>,
     text: Option<&str>,
     file_path: Option<&Path>,
     caption: Option<&str>,
 ) -> Result<()> {
-    let send_target = resolve_send_target(account, user_id, token, base_url, route_tag)?;
+    let send_target = resolve_send_target(account, user_id, token, route_tag)?;
 
     match (text, file_path) {
         (Some(text), None) => send_text(&send_target, context_token, text).await,
@@ -141,25 +139,23 @@ fn resolve_send_target(
     account: Option<usize>,
     user_id: Option<&str>,
     token: Option<&str>,
-    base_url: Option<&str>,
     route_tag: Option<&str>,
 ) -> Result<SendTarget> {
-    let using_explicit = token.is_some() || base_url.is_some() || route_tag.is_some();
+    let using_explicit = token.is_some() || route_tag.is_some();
 
     if using_explicit {
         if account.is_some() {
-            bail!("`--account` cannot be used with `--token` / `--base-url` / `--route-tag`");
+            bail!("`--account` cannot be used with `--token` / `--route-tag`");
         }
 
         let token = token.ok_or_else(|| anyhow!("`--token` is required in explicit credential mode"))?;
         let user_id =
             user_id.ok_or_else(|| anyhow!("`--user-id` is required in explicit credential mode"))?;
-        let base_url = base_url.unwrap_or(DEFAULT_BASE_URL);
 
         return Ok(SendTarget::Explicit {
             user_id: user_id.to_string(),
-            client: WeixinApiClient::new(base_url, token, route_tag.map(str::to_string)),
-            display_name: format!("explicit token at `{base_url}`"),
+            client: WeixinApiClient::new(token, route_tag.map(str::to_string)),
+            display_name: "explicit token".to_string(),
         });
     }
 

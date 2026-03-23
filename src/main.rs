@@ -9,7 +9,7 @@ pub use errors::{Error, Result};
 use anyhow::Result as AnyResult;
 use clap::Parser;
 use cli::{AccountCommand, Cli, Command};
-use commands::login::{LoginOptions, login};
+use commands::login::login;
 
 #[tokio::main]
 async fn main() -> AnyResult<()> {
@@ -17,12 +17,15 @@ async fn main() -> AnyResult<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Login(args) => {
-            let user_id = login(LoginOptions {
-                base_url: args.base_url,
-            })
-            .await?;
+        Command::Login(_args) => {
+            let user_id = login().await?;
             println!("logged in as user `{user_id}`");
+        }
+        Command::Qrcode(_args) => {
+            commands::qrcode::print_qrcode().await?;
+        }
+        Command::QrcodeStatus(args) => {
+            commands::qrcode::print_qrcode_status(&args.qrcode_id).await?;
         }
         Command::Account(args) => match args.command {
             AccountCommand::List => commands::account::print_accounts()?,
@@ -35,7 +38,6 @@ async fn main() -> AnyResult<()> {
                 args.account,
                 args.user_id.as_deref(),
                 args.token.as_deref(),
-                args.base_url.as_deref(),
                 args.route_tag.as_deref(),
                 args.context_token.as_deref(),
                 args.text.as_deref(),
