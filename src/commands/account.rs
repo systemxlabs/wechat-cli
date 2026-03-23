@@ -42,6 +42,14 @@ pub fn load_account(user_id: Option<&str>) -> Result<AccountSession> {
     })
 }
 
+pub fn load_account_by_index(index: usize) -> Result<AccountSession> {
+    let accounts = list_accounts()?;
+    accounts
+        .into_iter()
+        .nth(index)
+        .ok_or_else(|| anyhow!("account index `{index}` not found"))
+}
+
 pub fn build_client(session: &AccountSession) -> WeixinApiClient {
     WeixinApiClient::new(
         &session.data.base_url,
@@ -76,12 +84,13 @@ pub fn print_accounts() -> Result<()> {
         return Ok(());
     }
 
-    for entry in accounts {
+    for (index, entry) in accounts.into_iter().enumerate() {
         let route_tag = entry
             .config
             .as_ref()
             .and_then(|config| config.route_tag.as_deref())
             .unwrap_or("-");
+        println!("account: {index}");
         println!("user_id: {}", entry.user_id);
         println!("bot_id: {}", entry.data.bot_id);
         println!("base_url: {}", entry.data.base_url);

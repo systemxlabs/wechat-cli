@@ -109,7 +109,11 @@ wechat-cli send [OPTIONS] <--text <TEXT>|--file <FILE>>
 
 Options:
 
+- `--account <INDEX>`
 - `--user-id <USER_ID>`
+- `--token <TOKEN>`
+- `--base-url <BASE_URL>` optional in explicit credential mode
+- `--route-tag <ROUTE_TAG>`
 - `--context-token <CONTEXT_TOKEN>` required
 - `--text <TEXT>`
 - `--file <FILE>`
@@ -117,6 +121,10 @@ Options:
 
 Rules:
 
+- `--account <index>` selects a saved account
+- if `--account` and `--user-id` are both omitted, saved account index `0` is used
+- `--token` switches `send` into explicit credential mode
+- in explicit credential mode, `--user-id` is required and `--base-url` defaults to `https://ilinkai.weixin.qq.com`
 - `--text` and `--file` are mutually exclusive
 - `--caption` can only be used with `--file`
 - Image files are sent as image messages automatically
@@ -135,7 +143,7 @@ Recommended flow:
 Example:
 
 ```bash
-wechat-cli send --user-id <user_id> --context-token <token> --text "hello"
+wechat-cli send --account 0 --context-token <token> --text "hello"
 ```
 
 ## IDs

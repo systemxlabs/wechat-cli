@@ -12,14 +12,19 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Log in with a QR code and save the account locally.
     Login(LoginArgs),
+    /// Inspect saved accounts.
     Account(AccountArgs),
+    /// Wait for the next inbound message and print its context token.
     GetContextToken(GetContextTokenArgs),
+    /// Send a text, image, or file message.
     Send(SendArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct LoginArgs {
+    /// Override the default iLink API base URL.
     #[arg(long)]
     pub base_url: Option<String>,
 }
@@ -32,11 +37,13 @@ pub struct AccountArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum AccountCommand {
+    /// List saved accounts in index order.
     List,
 }
 
 #[derive(Debug, Args)]
 pub struct GetContextTokenArgs {
+    /// Saved account user ID. If omitted, the first saved account is used.
     #[arg(long)]
     pub user_id: Option<String>,
 }
@@ -48,15 +55,38 @@ pub struct GetContextTokenArgs {
         .required(true)
         .multiple(false)
 ))]
+#[command(
+    after_help = "Saved account selection:
+  1. --account <index>
+  2. --user-id <user_id>
+  3. default saved account index 0 if neither is provided
+
+Explicit credentials mode:
+  --token <token> [--base-url <base_url>] --user-id <user_id> [--route-tag <route_tag>]
+
+Rules:
+  --account and --user-id cannot be used together in saved account mode
+  --account cannot be used with explicit credential flags
+  --base-url defaults to https://ilinkai.weixin.qq.com in explicit credential mode
+  --context-token is always required and is never read from local cache"
+)]
 pub struct SendArgs {
-    #[arg(long)]
+    #[arg(long, help = "Saved account index from `wechat-cli account list`. If omitted together with `--user-id`, account index 0 is used")]
+    pub account: Option<usize>,
+    #[arg(long, help = "Saved account user ID, or the target user ID when using explicit credentials")]
     pub user_id: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Explicit bot token. Requires `--user-id`. `--base-url` is optional")]
+    pub token: Option<String>,
+    #[arg(long, help = "Explicit API base URL. Defaults to `https://ilinkai.weixin.qq.com` when `--token` is used")]
+    pub base_url: Option<String>,
+    #[arg(long, help = "Optional explicit route tag header used with explicit credentials")]
+    pub route_tag: Option<String>,
+    #[arg(long, help = "Context token printed by `get-context-token`. Always required for sending")]
     pub context_token: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Plain text message body")]
     pub text: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "File path to send. Image files are sent as image messages automatically")]
     pub file: Option<PathBuf>,
-    #[arg(long, requires = "file")]
+    #[arg(long, requires = "file", help = "Optional caption for `--file`")]
     pub caption: Option<String>,
 }

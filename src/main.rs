@@ -32,7 +32,11 @@ async fn main() -> AnyResult<()> {
         }
         Command::Send(args) => {
             commands::send::run(
+                args.account,
                 args.user_id.as_deref(),
+                args.token.as_deref(),
+                args.base_url.as_deref(),
+                args.route_tag.as_deref(),
                 args.context_token.as_deref(),
                 args.text.as_deref(),
                 args.file.as_deref(),
