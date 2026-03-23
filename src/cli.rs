@@ -51,6 +51,8 @@ pub enum AccountCommand {
     List,
     /// Add or overwrite a saved account.
     Add(AccountAddArgs),
+    /// Delete a saved account.
+    Delete(AccountDeleteArgs),
 }
 
 #[derive(Debug, Args)]
@@ -67,6 +69,22 @@ pub struct AccountAddArgs {
     /// Optional route tag saved for later requests.
     #[arg(long)]
     pub route_tag: Option<String>,
+}
+
+#[derive(Debug, Args)]
+#[command(group(
+    ArgGroup::new("selector")
+        .args(["account", "user_id"])
+        .required(true)
+        .multiple(false)
+))]
+pub struct AccountDeleteArgs {
+    /// Saved account index from `wechat-cli account list`.
+    #[arg(long)]
+    pub account: Option<usize>,
+    /// Saved account user ID.
+    #[arg(long)]
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Args)]

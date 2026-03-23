@@ -114,7 +114,16 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
     save_accounts_file(&accounts)
 }
 
-
+/// Deletes credentials for the given stable user ID from local storage.
+pub fn delete_account_data(account_id: &str) -> Result<()> {
+    let mut accounts = load_accounts_file()?;
+    let original_len = accounts.accounts.len();
+    accounts.accounts.retain(|account| account.user_id != account_id);
+    if accounts.accounts.len() == original_len {
+        return Err(anyhow!("account `{account_id}` not found"));
+    }
+    save_accounts_file(&accounts)
+}
 
 #[cfg(test)]
 mod tests {

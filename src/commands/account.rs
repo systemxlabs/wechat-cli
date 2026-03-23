@@ -88,6 +88,21 @@ pub fn print_accounts() -> Result<()> {
     Ok(())
 }
 
+pub fn delete_account(index: Option<usize>, user_id: Option<&str>) -> Result<()> {
+    let user_id = match (index, user_id) {
+        (Some(index), None) => load_account_by_index(index)?.user_id,
+        (None, Some(user_id)) => {
+            let session = load_account(Some(user_id))?;
+            session.user_id
+        }
+        _ => bail!("exactly one of `--account` or `--user-id` is required"),
+    };
+
+    storage::delete_account_data(&user_id)?;
+    println!("deleted account `{user_id}`");
+    Ok(())
+}
+
 pub fn add_account(user_id: &str, bot_id: &str, token: &str, route_tag: Option<&str>) -> Result<()> {
     if !user_id.ends_with("@im.wechat") {
         bail!("user_id `{user_id}` must end with `@im.wechat`");
