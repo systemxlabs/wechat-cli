@@ -25,6 +25,12 @@ fn accounts_file_path() -> PathBuf {
     storage_root().join("accounts.json")
 }
 
+fn account_config_file_path(account_id: &str) -> PathBuf {
+    storage_root()
+        .join("config")
+        .join(format!("{account_id}.json"))
+}
+
 /// Persisted authentication credentials for a single `WeChat` account.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountData {
@@ -125,11 +131,18 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
 
 /// Loads the optional per-user configuration, returning `None` if absent.
 pub fn get_account_config(account_id: &str) -> Option<AccountConfig> {
-    let path = storage_root()
-        .join("config")
-        .join(format!("{account_id}.json"));
+    let path = account_config_file_path(account_id);
     let data = std::fs::read_to_string(&path).ok()?;
     serde_json::from_str(&data).ok()
+}
+
+/// Saves optional per-user configuration to local storage.
+pub fn save_account_config(account_id: &str, config: &AccountConfig) -> Result<()> {
+    let path = account_config_file_path(account_id);
+    std::fs::create_dir_all(path.parent().unwrap()).context(IoSnafu)?;
+    let json = serde_json::to_string_pretty(config).context(JsonSnafu)?;
+    std::fs::write(&path, json).context(IoSnafu)?;
+    Ok(())
 }
 
 #[cfg(test)]

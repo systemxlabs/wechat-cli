@@ -99,3 +99,32 @@ pub fn print_accounts() -> Result<()> {
 
     Ok(())
 }
+
+pub fn add_account(user_id: &str, bot_id: &str, token: &str, route_tag: Option<&str>) -> Result<()> {
+    if !user_id.ends_with("@im.wechat") {
+        bail!("user_id `{user_id}` must end with `@im.wechat`");
+    }
+    if !bot_id.ends_with("@im.bot") {
+        bail!("bot_id `{bot_id}` must end with `@im.bot`");
+    }
+    if token.trim().is_empty() {
+        bail!("token cannot be empty");
+    }
+
+    let data = AccountData {
+        token: token.to_string(),
+        saved_at: chrono::Utc::now().to_rfc3339(),
+        bot_id: bot_id.to_string(),
+        user_id: user_id.to_string(),
+    };
+    storage::save_account_data(user_id, &data)?;
+    storage::save_account_config(
+        user_id,
+        &AccountConfig {
+            route_tag: route_tag.map(str::to_string),
+        },
+    )?;
+
+    println!("saved account `{user_id}`");
+    Ok(())
+}
