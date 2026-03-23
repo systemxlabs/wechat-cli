@@ -13,7 +13,7 @@ use commands::login::login;
 
 #[tokio::main]
 async fn main() -> AnyResult<()> {
-    init_tracing();
+    init_logger();
     let cli = Cli::parse();
 
     match cli.command {
@@ -51,12 +51,9 @@ async fn main() -> AnyResult<()> {
     Ok(())
 }
 
-fn init_tracing() {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "warn,wechat_cli=info".into()),
-        )
-        .with_target(false)
-        .try_init();
+fn init_logger() {
+    let env = env_logger::Env::default().default_filter_or("warn,wechat_cli=info");
+    let mut builder = env_logger::Builder::from_env(env);
+    builder.format_target(false);
+    let _ = builder.try_init();
 }
