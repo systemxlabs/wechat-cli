@@ -1,12 +1,11 @@
-use std::time::Duration;
+use std::{error::Error as StdError, fmt, time::Duration};
 
+use anyhow::{Context, Result};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::Client;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use snafu::ResultExt;
 
-use crate::errors::{ApiSnafu, HttpSnafu, JsonSnafu, Result, SessionExpiredSnafu};
 use crate::storage::ILINK_API_ROOT;
 
 use super::models::{
@@ -26,6 +25,35 @@ struct ApiStatus {
     ret: Option<i64>,
     #[serde(default)]
     err_msg: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct ApiError {
+    code: i64,
+    message: String,
+}
+
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "API error (code {}): {}", self.code, self.message)
+    }
+}
+
+impl StdError for ApiError {}
+
+#[derive(Debug)]
+pub struct SessionExpiredError;
+
+impl fmt::Display for SessionExpiredError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Session expired")
+    }
+}
+
+impl StdError for SessionExpiredError {}
+
+pub fn is_session_expired(err: &anyhow::Error) -> bool {
+    err.is::<SessionExpiredError>()
 }
 
 pub(crate) fn build_http_client() -> Client {
@@ -98,7 +126,7 @@ impl WeixinApiClient {
         TResp: DeserializeOwned,
     {
         let url = format!("{}/{}", ILINK_API_ROOT, path);
-        let body_bytes = serde_json::to_vec(body).context(JsonSnafu)?;
+        let body_bytes = serde_json::to_vec(body).context("failed to serialize request body")?;
         let response_bytes = self
             .client
             .post(&url)
@@ -107,10 +135,10 @@ impl WeixinApiClient {
             .timeout(timeout)
             .send()
             .await
-            .context(HttpSnafu)?
+            .with_context(|| format!("error sending request for url ({url})"))?
             .bytes()
             .await
-            .context(HttpSnafu)?;
+            .with_context(|| format!("error reading response body for url ({url})"))?;
 
         Self::decode_response(&response_bytes)
     }
@@ -133,10 +161,10 @@ impl WeixinApiClient {
             .timeout(timeout)
             .send()
             .await
-            .context(HttpSnafu)?
+            .with_context(|| format!("error sending request for url ({url})"))?
             .bytes()
             .await
-            .context(HttpSnafu)?;
+            .with_context(|| format!("error reading response body for url ({url})"))?;
 
         Self::decode_response(&response_bytes)
     }
@@ -145,32 +173,33 @@ impl WeixinApiClient {
     where
         T: DeserializeOwned,
     {
-        let status: ApiStatus = serde_json::from_slice(response_bytes).context(JsonSnafu)?;
+        let status: ApiStatus =
+            serde_json::from_slice(response_bytes).context("failed to decode API status")?;
 
         if let Some(code) = status.errcode {
             if code == SESSION_EXPIRED_ERRCODE {
-                return Err(SessionExpiredSnafu.build());
+                return Err(SessionExpiredError.into());
             }
             if code != 0 {
-                return Err(ApiSnafu {
+                return Err(ApiError {
                     code,
                     message: status.errmsg.unwrap_or_else(|| "unknown error".to_string()),
                 }
-                .build());
+                .into());
             }
         }
 
         if let Some(code) = status.ret {
             if code != 0 {
-                return Err(ApiSnafu {
+                return Err(ApiError {
                     code,
                     message: status.err_msg.unwrap_or_else(|| "unknown error".to_string()),
                 }
-                .build());
+                .into());
             }
         }
 
-        serde_json::from_slice(response_bytes).context(JsonSnafu)
+        serde_json::from_slice(response_bytes).context("failed to decode API response")
     }
 
     pub async fn fetch_qr_code(&self) -> Result<FetchQrCodeResponse> {
