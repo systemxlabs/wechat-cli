@@ -32,7 +32,7 @@ fn random_wechat_uin() -> String {
 }
 
 fn generate_client_id() -> String {
-    format!("weixin-agent-{}", Uuid::new_v4().simple())
+    format!("wechat-cli-{}", Uuid::new_v4().simple())
 }
 
 pub struct WeixinApiClient {
