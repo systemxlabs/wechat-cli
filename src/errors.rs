@@ -98,7 +98,9 @@ mod tests {
 
     #[test]
     fn test_error_from_json() {
-        let json_err = serde_json::from_str::<serde_json::Value>("not json").unwrap_err();
+        let json_err =
+            serde_json::from_str::<std::collections::BTreeMap<String, String>>("not json")
+                .unwrap_err();
         let err: Error = JsonSnafu.into_error(json_err);
         assert!(
             matches!(err, Error::Json { .. }),

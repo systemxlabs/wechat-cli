@@ -91,7 +91,7 @@ async fn send_media(
             let media_item = build_media_item(media_kind, &uploaded);
 
             client
-                .send_media_message(&session.data.user_id, &context_token, caption, &media_item)
+                .send_media_message(&session.data.user_id, &context_token, caption, media_item)
                 .await
                 .with_context(|| format!("failed to send `{}`", file_path.display()))?;
 
@@ -118,7 +118,7 @@ async fn send_media(
             let media_item = build_media_item(media_kind, &uploaded);
 
             client
-                .send_media_message(user_id, &context_token, caption, &media_item)
+                .send_media_message(user_id, &context_token, caption, media_item)
                 .await
                 .with_context(|| format!("failed to send `{}`", file_path.display()))?;
 

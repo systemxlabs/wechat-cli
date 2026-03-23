@@ -19,16 +19,16 @@ It supports:
 - Access to `https://ilinkai.weixin.qq.com`
 - A WeChat client that can scan the login QR code
 
-## Build
+## Install
 
 ```bash
-cargo build
+cargo install wechat-cli
 ```
 
-Binary:
+Install from the current repository checkout:
 
-```text
-target/debug/wechat-cli
+```bash
+cargo install --path .
 ```
 
 ## Quick Start

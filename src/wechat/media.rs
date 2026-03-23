@@ -5,7 +5,6 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use block_padding::Pkcs7;
 use cipher::{BlockEncryptMut as _, KeyInit};
 use ecb;
-use serde_json::Value;
 use snafu::ResultExt;
 
 use crate::{
@@ -14,14 +13,12 @@ use crate::{
 };
 
 use super::api::{WeixinApiClient, build_http_client};
+use super::models::{FileItem, GetUploadUrlRequest, ImageItem, OutboundMessageItem};
 
 type Aes128EcbEnc = ecb::Encryptor<Aes128>;
 
 const UPLOAD_MEDIA_IMAGE: u64 = 1;
 const UPLOAD_MEDIA_FILE: u64 = 3;
-const MESSAGE_ITEM_IMAGE: u64 = 2;
-const MESSAGE_ITEM_FILE: u64 = 4;
-
 #[derive(Debug, Clone)]
 pub struct UploadedMedia {
     pub encrypt_query_param: String,
@@ -68,18 +65,17 @@ pub async fn upload_media(
     };
 
     let upload_info = api_client
-        .get_upload_url(&serde_json::json!({
-            "filekey": filekey_hex,
-            "media_type": media_type,
-            "to_user_id": to_user_id,
-            "rawsize": file_size,
-            "rawfilemd5": rawfilemd5,
-            "filesize": file_size_ciphertext,
-            "no_need_thumb": true,
-            "aeskey": aes_key_hex,
-        }))
+        .get_upload_url(&GetUploadUrlRequest::new(
+            filekey_hex.clone(),
+            media_type,
+            to_user_id.to_string(),
+            file_size,
+            rawfilemd5,
+            file_size_ciphertext,
+            aes_key_hex.clone(),
+        ))
         .await?;
-    let upload_param = upload_info["upload_param"].as_str().ok_or_else(|| {
+    let upload_param = upload_info.upload_param().ok_or_else(|| {
         ApiSnafu {
             code: -1_i64,
             message: "no upload_param in response".to_owned(),
@@ -131,31 +127,10 @@ pub async fn upload_media(
     })
 }
 
-pub fn build_media_item(kind: OutboundMediaKind, uploaded: &UploadedMedia) -> Value {
+pub fn build_media_item(kind: OutboundMediaKind, uploaded: &UploadedMedia) -> OutboundMessageItem {
     match kind {
-        OutboundMediaKind::Image => serde_json::json!({
-            "type": MESSAGE_ITEM_IMAGE,
-            "image_item": {
-                "media": {
-                    "encrypt_query_param": uploaded.encrypt_query_param,
-                    "aes_key": uploaded.aes_key_base64,
-                    "encrypt_type": 1
-                },
-                "mid_size": uploaded.file_size_ciphertext
-            }
-        }),
-        OutboundMediaKind::File => serde_json::json!({
-            "type": MESSAGE_ITEM_FILE,
-            "file_item": {
-                "media": {
-                    "encrypt_query_param": uploaded.encrypt_query_param,
-                    "aes_key": uploaded.aes_key_base64,
-                    "encrypt_type": 1
-                },
-                "file_name": uploaded.file_name,
-                "len": uploaded.file_size.to_string()
-            }
-        }),
+        OutboundMediaKind::Image => OutboundMessageItem::image(ImageItem::from_uploaded(uploaded)),
+        OutboundMediaKind::File => OutboundMessageItem::file(FileItem::from_uploaded(uploaded)),
     }
 }
 
@@ -184,8 +159,14 @@ mod tests {
                 file_size_ciphertext: 16,
             },
         );
-        assert_eq!(item["type"].as_u64(), Some(MESSAGE_ITEM_FILE));
-        assert_eq!(item["file_item"]["file_name"].as_str(), Some("demo.txt"));
-        assert_eq!(item["file_item"]["len"].as_str(), Some("12"));
+        assert_eq!(item.item_type, 4);
+        assert_eq!(
+            item.file_item.as_ref().map(|file| file.file_name.as_str()),
+            Some("demo.txt")
+        );
+        assert_eq!(
+            item.file_item.as_ref().map(|file| file.len.as_str()),
+            Some("12")
+        );
     }
 }

@@ -2,16 +2,30 @@ use std::time::Duration;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::Client;
-use serde_json::Value;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use snafu::ResultExt;
-use uuid::Uuid;
 
-use crate::errors::{ApiSnafu, HttpSnafu, Result, SessionExpiredSnafu};
+use crate::errors::{ApiSnafu, HttpSnafu, JsonSnafu, Result, SessionExpiredSnafu};
+
+use super::models::{
+    EmptyResponse, FetchQrCodeResponse, GetUpdatesRequest, GetUpdatesResponse,
+    GetUploadUrlRequest, GetUploadUrlResponse, QrCodeStatusResponse, SendMessageRequest,
+};
 
 const SESSION_EXPIRED_ERRCODE: i64 = -14;
-const MESSAGE_ITEM_TEXT: u64 = 1;
-const MESSAGE_TYPE_BOT: u64 = 2;
-const MESSAGE_STATE_FINISH: u64 = 2;
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ApiStatus {
+    #[serde(default)]
+    errcode: Option<i64>,
+    #[serde(default)]
+    errmsg: Option<String>,
+    #[serde(default)]
+    ret: Option<i64>,
+    #[serde(default)]
+    err_msg: Option<String>,
+}
 
 pub(crate) fn build_http_client() -> Client {
     Client::builder()
@@ -20,19 +34,9 @@ pub(crate) fn build_http_client() -> Client {
         .expect("failed to build reqwest client")
 }
 
-fn build_base_info() -> Value {
-    serde_json::json!({
-        "channel_version": env!("CARGO_PKG_VERSION"),
-    })
-}
-
 fn random_wechat_uin() -> String {
     let raw = rand::random::<u32>().to_string();
     STANDARD.encode(raw.as_bytes())
-}
-
-fn generate_client_id() -> String {
-    format!("wechat-cli-{}", Uuid::new_v4().simple())
 }
 
 pub struct WeixinApiClient {
@@ -89,19 +93,40 @@ impl WeixinApiClient {
         headers
     }
 
-    async fn post(&self, path: &str, body: &Value) -> Result<Value> {
-        self.post_with_timeout(path, body, Duration::from_secs(30))
+    async fn post_json<TReq, TResp>(&self, path: &str, body: &TReq, timeout: Duration) -> Result<TResp>
+    where
+        TReq: Serialize + ?Sized,
+        TResp: DeserializeOwned,
+    {
+        let url = format!("{}/{}", self.base_url, path);
+        let body_bytes = serde_json::to_vec(body).context(JsonSnafu)?;
+        let response_bytes = self
+            .client
+            .post(&url)
+            .headers(self.json_headers(body_bytes.len()))
+            .body(body_bytes)
+            .timeout(timeout)
+            .send()
             .await
+            .context(HttpSnafu)?
+            .bytes()
+            .await
+            .context(HttpSnafu)?;
+
+        Self::decode_response(&response_bytes)
     }
 
-    async fn post_form_with_timeout(
+    async fn post_form<TResp>(
         &self,
         path: &str,
         form: &[(&str, &str)],
         timeout: Duration,
-    ) -> Result<Value> {
+    ) -> Result<TResp>
+    where
+        TResp: DeserializeOwned,
+    {
         let url = format!("{}/{}", self.base_url, path);
-        let resp = self
+        let response_bytes = self
             .client
             .post(&url)
             .headers(self.auth_headers())
@@ -110,68 +135,47 @@ impl WeixinApiClient {
             .send()
             .await
             .context(HttpSnafu)?
-            .json::<Value>()
+            .bytes()
             .await
             .context(HttpSnafu)?;
 
-        Self::check_api_error(resp)
+        Self::decode_response(&response_bytes)
     }
 
-    async fn post_with_timeout(
-        &self,
-        path: &str,
-        body: &Value,
-        timeout: Duration,
-    ) -> Result<Value> {
-        let url = format!("{}/{}", self.base_url, path);
-        let body_text = serde_json::to_string(body).context(crate::errors::JsonSnafu)?;
-        let resp = self
-            .client
-            .post(&url)
-            .headers(self.json_headers(body_text.as_bytes().len()))
-            .body(body_text)
-            .timeout(timeout)
-            .send()
-            .await
-            .context(HttpSnafu)?
-            .json::<Value>()
-            .await
-            .context(HttpSnafu)?;
+    fn decode_response<T>(response_bytes: &[u8]) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        let status: ApiStatus = serde_json::from_slice(response_bytes).context(JsonSnafu)?;
 
-        Self::check_api_error(resp)
-    }
-
-    fn check_api_error(resp: Value) -> Result<Value> {
-        if let Some(code) = resp.get("errcode").and_then(serde_json::Value::as_i64) {
+        if let Some(code) = status.errcode {
             if code == SESSION_EXPIRED_ERRCODE {
                 return Err(SessionExpiredSnafu.build());
             }
             if code != 0 {
-                let msg = resp
-                    .get("errmsg")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown error")
-                    .to_string();
-                return Err(ApiSnafu { code, message: msg }.build());
+                return Err(ApiSnafu {
+                    code,
+                    message: status.errmsg.unwrap_or_else(|| "unknown error".to_string()),
+                }
+                .build());
             }
         }
 
-        if let Some(code) = resp.get("ret").and_then(serde_json::Value::as_i64) {
+        if let Some(code) = status.ret {
             if code != 0 {
-                let msg = resp
-                    .get("err_msg")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown error")
-                    .to_string();
-                return Err(ApiSnafu { code, message: msg }.build());
+                return Err(ApiSnafu {
+                    code,
+                    message: status.err_msg.unwrap_or_else(|| "unknown error".to_string()),
+                }
+                .build());
             }
         }
 
-        Ok(resp)
+        serde_json::from_slice(response_bytes).context(JsonSnafu)
     }
 
-    pub async fn fetch_qr_code(&self) -> Result<Value> {
-        self.post_form_with_timeout(
+    pub async fn fetch_qr_code(&self) -> Result<FetchQrCodeResponse> {
+        self.post_form(
             "ilink/bot/get_bot_qrcode",
             &[("bot_type", "3")],
             Duration::from_secs(30),
@@ -179,8 +183,8 @@ impl WeixinApiClient {
         .await
     }
 
-    pub async fn get_qr_code_status(&self, qrcode_id: &str) -> Result<Value> {
-        self.post_form_with_timeout(
+    pub async fn get_qr_code_status(&self, qrcode_id: &str) -> Result<QrCodeStatusResponse> {
+        self.post_form(
             "ilink/bot/get_qrcode_status",
             &[("qrcode", qrcode_id)],
             Duration::from_secs(40),
@@ -188,14 +192,17 @@ impl WeixinApiClient {
         .await
     }
 
-    pub async fn get_updates(&self, buf: Option<&str>) -> Result<Value> {
-        let mut body = serde_json::json!({
-            "base_info": build_base_info(),
-        });
-        if let Some(b) = buf {
-            body["get_updates_buf"] = Value::String(b.to_string());
-        }
-        self.post_with_timeout("ilink/bot/getupdates", &body, Duration::from_secs(40))
+    pub async fn get_updates(&self, buf: Option<&str>) -> Result<GetUpdatesResponse> {
+        let body = GetUpdatesRequest {
+            get_updates_buf: buf.map(str::to_string),
+            base_info: super::models::BaseInfo::current(),
+        };
+        self.post_json("ilink/bot/getupdates", &body, Duration::from_secs(40))
+            .await
+    }
+
+    pub async fn send_message(&self, body: &SendMessageRequest) -> Result<EmptyResponse> {
+        self.post_json("ilink/bot/sendmessage", body, Duration::from_secs(30))
             .await
     }
 
@@ -204,25 +211,13 @@ impl WeixinApiClient {
         to_user_id: &str,
         context_token: &str,
         text: &str,
-    ) -> Result<Value> {
-        let body = serde_json::json!({
-            "msg": {
-                "from_user_id": "",
-                "to_user_id": to_user_id,
-                "client_id": generate_client_id(),
-                "message_type": MESSAGE_TYPE_BOT,
-                "message_state": MESSAGE_STATE_FINISH,
-                "item_list": [{
-                    "type": MESSAGE_ITEM_TEXT,
-                    "text_item": {
-                        "text": text
-                    }
-                }],
-                "context_token": context_token
-            },
-            "base_info": build_base_info()
-        });
-        self.post("ilink/bot/sendmessage", &body).await
+    ) -> Result<EmptyResponse> {
+        let body = SendMessageRequest::new(
+            to_user_id.to_string(),
+            context_token.to_string(),
+            super::models::OutboundMessageItem::text(text.to_string()),
+        );
+        self.send_message(&body).await
     }
 
     pub async fn send_media_message(
@@ -230,30 +225,26 @@ impl WeixinApiClient {
         to_user_id: &str,
         context_token: &str,
         text: Option<&str>,
-        media_item: &Value,
-    ) -> Result<Value> {
+        media_item: super::models::OutboundMessageItem,
+    ) -> Result<EmptyResponse> {
         if let Some(t) = text {
             self.send_text_message(to_user_id, context_token, t).await?;
         }
-        let body = serde_json::json!({
-            "msg": {
-                "from_user_id": "",
-                "to_user_id": to_user_id,
-                "client_id": generate_client_id(),
-                "message_type": MESSAGE_TYPE_BOT,
-                "message_state": MESSAGE_STATE_FINISH,
-                "item_list": [media_item.clone()],
-                "context_token": context_token
-            },
-            "base_info": build_base_info()
-        });
-        self.post("ilink/bot/sendmessage", &body).await
+
+        let body = SendMessageRequest::new(
+            to_user_id.to_string(),
+            context_token.to_string(),
+            media_item,
+        );
+        self.send_message(&body).await
     }
 
-    pub async fn get_upload_url(&self, payload: &Value) -> Result<Value> {
-        let mut body = payload.clone();
-        body["base_info"] = build_base_info();
-        self.post("ilink/bot/getuploadurl", &body).await
+    pub async fn get_upload_url(
+        &self,
+        payload: &GetUploadUrlRequest,
+    ) -> Result<GetUploadUrlResponse> {
+        self.post_json("ilink/bot/getuploadurl", payload, Duration::from_secs(30))
+            .await
     }
 }
 

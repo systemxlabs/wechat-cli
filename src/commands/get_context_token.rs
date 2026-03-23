@@ -1,9 +1,9 @@
 use anyhow::{Result, bail};
-use serde_json::Value;
 
 use crate::{
     commands::account::{build_client, load_account},
     errors::Error,
+    wechat::models::InboundMessage,
 };
 
 pub async fn run(user_id: Option<&str>) -> Result<()> {
@@ -30,15 +30,10 @@ pub async fn run(user_id: Option<&str>) -> Result<()> {
             Ok(resp) => {
                 consecutive_errors = 0;
 
-                if let Some(messages) = resp["msg_list"]
-                    .as_array()
-                    .or_else(|| resp["msgs"].as_array())
-                {
-                    for message in messages {
-                        if let Some(context_token) = extract_context_token(&bot_id, message) {
-                            println!("{context_token}");
-                            return Ok(());
-                        }
+                for message in resp.messages() {
+                    if let Some(context_token) = extract_context_token(&bot_id, message) {
+                        println!("{context_token}");
+                        return Ok(());
                     }
                 }
             }
@@ -60,20 +55,16 @@ pub async fn run(user_id: Option<&str>) -> Result<()> {
     }
 }
 
-fn extract_context_token(bot_id: &str, message: &Value) -> Option<String> {
-    let from_user_id = message["from_user_id"].as_str().unwrap_or("");
-    let to_user_id = message["to_user_id"].as_str().unwrap_or("");
-    let context_token = message["context_token"].as_str().unwrap_or("");
-
-    if context_token.is_empty() {
+fn extract_context_token(bot_id: &str, message: &InboundMessage) -> Option<String> {
+    if message.context_token.is_empty() {
         return None;
     }
 
-    let is_user_to_bot = to_user_id == bot_id && !from_user_id.is_empty();
-    let is_bot_to_user = from_user_id == bot_id && !to_user_id.is_empty();
+    let is_user_to_bot = message.to_user_id == bot_id && !message.from_user_id.is_empty();
+    let is_bot_to_user = message.from_user_id == bot_id && !message.to_user_id.is_empty();
 
     if is_user_to_bot || is_bot_to_user {
-        Some(context_token.to_string())
+        Some(message.context_token.clone())
     } else {
         None
     }
