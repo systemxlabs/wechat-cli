@@ -1,10 +1,7 @@
 mod cli;
 mod commands;
-mod errors;
 mod storage;
 mod wechat;
-
-pub use errors::{Error, Result};
 
 use anyhow::Result as AnyResult;
 use clap::Parser;
