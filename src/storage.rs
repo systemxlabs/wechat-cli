@@ -20,19 +20,15 @@ fn accounts_file_path() -> PathBuf {
     storage_root().join("accounts.json")
 }
 
-
-
 /// Persisted authentication credentials for a single `WeChat` account.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountData {
-    /// Bearer token used to authenticate API requests.
-    pub token: String,
+    /// Bearer bot token used to authenticate API requests.
+    #[serde(rename = "botToken")]
+    pub bot_token: String,
     /// ISO-8601 timestamp of when this data was saved.
     #[serde(rename = "savedAt")]
     pub saved_at: String,
-    /// The current iLink bot ID associated with this login session.
-    #[serde(rename = "botId")]
-    pub bot_id: String,
     /// The iLink user ID associated with this account.
     #[serde(rename = "userId")]
     pub user_id: String,
@@ -58,9 +54,14 @@ fn load_accounts_file() -> Result<AccountsFile> {
 
 fn save_accounts_file(accounts: &AccountsFile) -> Result<()> {
     let path = accounts_file_path();
-    std::fs::create_dir_all(path.parent().unwrap())
-        .with_context(|| format!("failed to create storage directory `{}`", path.parent().unwrap().display()))?;
-    let json = serde_json::to_string_pretty(accounts).context("failed to serialize accounts file")?;
+    std::fs::create_dir_all(path.parent().unwrap()).with_context(|| {
+        format!(
+            "failed to create storage directory `{}`",
+            path.parent().unwrap().display()
+        )
+    })?;
+    let json =
+        serde_json::to_string_pretty(accounts).context("failed to serialize accounts file")?;
     std::fs::write(&path, json)
         .with_context(|| format!("failed to write accounts file `{}`", path.display()))?;
     Ok(())
@@ -96,17 +97,15 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
         .find(|account| account.user_id == account_id)
     {
         *existing = AccountData {
-            token: data.token.clone(),
+            bot_token: data.bot_token.clone(),
             saved_at: data.saved_at.clone(),
-            bot_id: data.bot_id.clone(),
             user_id: data.user_id.clone(),
             route_tag: data.route_tag.clone(),
         };
     } else {
         accounts.accounts.push(AccountData {
-            token: data.token.clone(),
+            bot_token: data.bot_token.clone(),
             saved_at: data.saved_at.clone(),
-            bot_id: data.bot_id.clone(),
             user_id: data.user_id.clone(),
             route_tag: data.route_tag.clone(),
         });
@@ -118,7 +117,9 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
 pub fn delete_account_data(account_id: &str) -> Result<()> {
     let mut accounts = load_accounts_file()?;
     let original_len = accounts.accounts.len();
-    accounts.accounts.retain(|account| account.user_id != account_id);
+    accounts
+        .accounts
+        .retain(|account| account.user_id != account_id);
     if accounts.accounts.len() == original_len {
         return Err(anyhow!("account `{account_id}` not found"));
     }
@@ -132,25 +133,23 @@ mod tests {
     #[test]
     fn test_account_data_serde() {
         let data = AccountData {
-            token: "tok_abc".to_string(),
+            bot_token: "tok_abc".to_string(),
             saved_at: "2025-01-01T00:00:00Z".to_string(),
-            bot_id: "bot_123".to_string(),
             user_id: "user_123".to_string(),
+            route_tag: None,
         };
         let json = serde_json::to_string(&data).unwrap();
         let deserialized: AccountData = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.token, data.token);
+        assert_eq!(deserialized.bot_token, data.bot_token);
         assert_eq!(deserialized.saved_at, data.saved_at);
-        assert_eq!(deserialized.bot_id, data.bot_id);
         assert_eq!(deserialized.user_id, data.user_id);
     }
 
     #[test]
     fn test_account_data_with_route_tag() {
         let data = AccountData {
-            token: "tok_abc".to_string(),
+            bot_token: "tok_abc".to_string(),
             saved_at: "2025-01-01T00:00:00Z".to_string(),
-            bot_id: "bot_123".to_string(),
             user_id: "user_123".to_string(),
             route_tag: Some("tag_xyz".to_string()),
         };
@@ -161,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_account_data_without_route_tag() {
-        let json = r#"{"token":"tok_abc","savedAt":"2025-01-01T00:00:00Z","botId":"bot_123","userId":"user_123"}"#;
+        let json = r#"{"botToken":"tok_abc","savedAt":"2025-01-01T00:00:00Z","userId":"user_123"}"#;
         let data: AccountData = serde_json::from_str(json).unwrap();
         assert_eq!(data.route_tag, None);
     }

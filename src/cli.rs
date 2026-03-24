@@ -60,12 +60,9 @@ pub struct AccountAddArgs {
     /// WeChat user ID ending with `@im.wechat`.
     #[arg(long)]
     pub user_id: String,
-    /// Bot ID ending with `@im.bot`.
-    #[arg(long)]
-    pub bot_id: String,
     /// Bot token used to authenticate API requests.
     #[arg(long)]
-    pub token: String,
+    pub bot_token: String,
     /// Optional route tag saved for later requests.
     #[arg(long)]
     pub route_tag: Option<String>,
@@ -101,34 +98,47 @@ pub struct GetContextTokenArgs {
         .required(true)
         .multiple(false)
 ))]
-#[command(
-    after_help = "Saved account selection:
+#[command(after_help = "Saved account selection:
   1. --account <index>
   2. --user-id <user_id>
   3. default saved account index 0 if neither is provided
 
 Explicit credentials mode:
-  --token <token> --user-id <user_id> [--route-tag <route_tag>]
+  --bot-token <bot_token> --user-id <user_id> [--route-tag <route_tag>]
 
 Rules:
   --account and --user-id cannot be used together in saved account mode
-  --account cannot be used with explicit credential flags
-  --context-token is always required and is never read from local cache"
-)]
+  --account cannot be used with explicit bot credential flags
+  --context-token is always required and is never read from local cache")]
 pub struct SendArgs {
-    #[arg(long, help = "Saved account index from `wechat-cli account list`. If omitted together with `--user-id`, account index 0 is used")]
+    #[arg(
+        long,
+        help = "Saved account index from `wechat-cli account list`. If omitted together with `--user-id`, account index 0 is used"
+    )]
     pub account: Option<usize>,
-    #[arg(long, help = "Saved account user ID, or the target user ID when using explicit credentials")]
+    #[arg(
+        long,
+        help = "Saved account user ID, or the target user ID when using explicit credentials"
+    )]
     pub user_id: Option<String>,
     #[arg(long, help = "Explicit bot token. Requires `--user-id`")]
-    pub token: Option<String>,
-    #[arg(long, help = "Optional explicit route tag header used with explicit credentials")]
+    pub bot_token: Option<String>,
+    #[arg(
+        long,
+        help = "Optional explicit route tag header used with explicit credentials"
+    )]
     pub route_tag: Option<String>,
-    #[arg(long, help = "Context token printed by `get-context-token`. Always required for sending")]
+    #[arg(
+        long,
+        help = "Context token printed by `get-context-token`. Always required for sending"
+    )]
     pub context_token: Option<String>,
     #[arg(long, help = "Plain text message body")]
     pub text: Option<String>,
-    #[arg(long, help = "File path to send. Image files are sent as image messages automatically")]
+    #[arg(
+        long,
+        help = "File path to send. Image files are sent as image messages automatically"
+    )]
     pub file: Option<PathBuf>,
     #[arg(long, requires = "file", help = "Optional caption for `--file`")]
     pub caption: Option<String>,

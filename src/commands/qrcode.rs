@@ -16,8 +16,6 @@ pub struct QrcodeStatusOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bot_token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bot_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
 }
 
@@ -44,7 +42,6 @@ pub async fn print_qrcode_status(qrcode_id: &str) -> Result<()> {
         qrcode_id: qrcode_id.to_string(),
         status: response.status().to_string(),
         bot_token: response.bot_token().map(str::to_string),
-        bot_id: response.ilink_bot_id().map(str::to_string),
         user_id: response.ilink_user_id().map(str::to_string),
     };
 

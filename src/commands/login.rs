@@ -21,7 +21,9 @@ pub async fn fetch_qrcode_status(qrcode_id: &str) -> Result<QrCodeStatusResponse
 
 pub async fn login() -> Result<String> {
     let qr_resp = fetch_qrcode().await?;
-    let qrcode_url = qr_resp.qrcode_url().context("Login failed: no qrcode_url")?;
+    let qrcode_url = qr_resp
+        .qrcode_url()
+        .context("Login failed: no qrcode_url")?;
     let qrcode_id = qr_resp.qrcode_id().context("Login failed: no qrcode_id")?;
 
     let qr = qrcode::QrCode::new(qrcode_url.as_bytes())
@@ -47,21 +49,17 @@ pub async fn login() -> Result<String> {
                 bail!("QR code expired");
             }
             "confirmed" => {
-                let token = status_resp
+                let bot_token = status_resp
                     .bot_token()
                     .context("Login failed: no bot_token")?;
-                let bot_id = status_resp
-                    .ilink_bot_id()
-                    .context("Login failed: no ilink_bot_id")?;
                 let user_id = status_resp
                     .ilink_user_id()
                     .context("Login failed: no ilink_user_id")?;
                 let account_id = user_id.to_string();
 
                 let account_data = storage::AccountData {
-                    token: token.to_string(),
+                    bot_token: bot_token.to_string(),
                     saved_at: chrono::Utc::now().to_rfc3339(),
-                    bot_id: bot_id.to_string(),
                     user_id: user_id.to_string(),
                     route_tag: None,
                 };

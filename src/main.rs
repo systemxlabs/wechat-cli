@@ -28,8 +28,7 @@ async fn main() -> AnyResult<()> {
             AccountCommand::List => commands::account::print_accounts()?,
             AccountCommand::Add(args) => commands::account::add_account(
                 &args.user_id,
-                &args.bot_id,
-                &args.token,
+                &args.bot_token,
                 args.route_tag.as_deref(),
             )?,
             AccountCommand::Delete(args) => {
@@ -43,7 +42,7 @@ async fn main() -> AnyResult<()> {
             commands::send::run(
                 args.account,
                 args.user_id.as_deref(),
-                args.token.as_deref(),
+                args.bot_token.as_deref(),
                 args.route_tag.as_deref(),
                 args.context_token.as_deref(),
                 args.text.as_deref(),

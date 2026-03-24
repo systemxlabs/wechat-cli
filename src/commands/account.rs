@@ -33,10 +33,7 @@ pub fn load_account(user_id: Option<&str>) -> Result<AccountSession> {
     let data = storage::get_account_data(&user_id)
         .with_context(|| format!("failed to load account data for `{user_id}`"))?;
 
-    Ok(AccountSession {
-        user_id,
-        data,
-    })
+    Ok(AccountSession { user_id, data })
 }
 
 pub fn load_account_by_index(index: usize) -> Result<AccountSession> {
@@ -48,10 +45,7 @@ pub fn load_account_by_index(index: usize) -> Result<AccountSession> {
 }
 
 pub fn build_client(session: &AccountSession) -> WeixinApiClient {
-    WeixinApiClient::new(
-        &session.data.token,
-        session.data.route_tag.clone(),
-    )
+    WeixinApiClient::new(&session.data.bot_token, session.data.route_tag.clone())
 }
 
 pub fn list_accounts() -> Result<Vec<AccountSession>> {
@@ -60,10 +54,7 @@ pub fn list_accounts() -> Result<Vec<AccountSession>> {
     for user_id in user_ids {
         let data = storage::get_account_data(&user_id)
             .with_context(|| format!("failed to load account data for `{user_id}`"))?;
-        accounts.push(AccountSession {
-            user_id,
-            data,
-        });
+        accounts.push(AccountSession { user_id, data });
     }
     Ok(accounts)
 }
@@ -79,7 +70,6 @@ pub fn print_accounts() -> Result<()> {
         let route_tag = entry.data.route_tag.as_deref().unwrap_or("-");
         println!("account: {index}");
         println!("user_id: {}", entry.user_id);
-        println!("bot_id: {}", entry.data.bot_id);
         println!("saved_at: {}", entry.data.saved_at);
         println!("route_tag: {route_tag}");
         println!();
@@ -103,21 +93,17 @@ pub fn delete_account(index: Option<usize>, user_id: Option<&str>) -> Result<()>
     Ok(())
 }
 
-pub fn add_account(user_id: &str, bot_id: &str, token: &str, route_tag: Option<&str>) -> Result<()> {
+pub fn add_account(user_id: &str, bot_token: &str, route_tag: Option<&str>) -> Result<()> {
     if !user_id.ends_with("@im.wechat") {
         bail!("user_id `{user_id}` must end with `@im.wechat`");
     }
-    if !bot_id.ends_with("@im.bot") {
-        bail!("bot_id `{bot_id}` must end with `@im.bot`");
-    }
-    if token.trim().is_empty() {
-        bail!("token cannot be empty");
+    if bot_token.trim().is_empty() {
+        bail!("bot_token cannot be empty");
     }
 
     let data = AccountData {
-        token: token.to_string(),
+        bot_token: bot_token.to_string(),
         saved_at: chrono::Utc::now().to_rfc3339(),
-        bot_id: bot_id.to_string(),
         user_id: user_id.to_string(),
         route_tag: route_tag.map(str::to_string),
     };

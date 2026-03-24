@@ -10,12 +10,9 @@ pub async fn run(user_id: Option<&str>) -> Result<()> {
     let session = load_account(user_id)?;
     let client = build_client(&session);
     let user_id = session.user_id;
-    let bot_id = session.data.bot_id;
     let mut consecutive_errors = 0u32;
 
-    eprintln!(
-        "waiting for the bound user to send a message for `{user_id}`; press Ctrl+C to stop"
-    );
+    eprintln!("waiting for the bound user to send a message for `{user_id}`; press Ctrl+C to stop");
 
     loop {
         let result = tokio::select! {
@@ -31,7 +28,7 @@ pub async fn run(user_id: Option<&str>) -> Result<()> {
                 consecutive_errors = 0;
 
                 for message in resp.messages() {
-                    if let Some(context_token) = extract_context_token(&bot_id, message) {
+                    if let Some(context_token) = extract_context_token(&user_id, message) {
                         println!("{context_token}");
                         return Ok(());
                     }
@@ -61,15 +58,12 @@ fn is_timeout_error(err: &anyhow::Error) -> bool {
         .is_some_and(reqwest::Error::is_timeout)
 }
 
-fn extract_context_token(bot_id: &str, message: &InboundMessage) -> Option<String> {
+fn extract_context_token(user_id: &str, message: &InboundMessage) -> Option<String> {
     if message.context_token.is_empty() {
         return None;
     }
 
-    let is_user_to_bot = message.to_user_id == bot_id && !message.from_user_id.is_empty();
-    let is_bot_to_user = message.from_user_id == bot_id && !message.to_user_id.is_empty();
-
-    if is_user_to_bot || is_bot_to_user {
+    if message.from_user_id == user_id && !message.to_user_id.is_empty() {
         Some(message.context_token.clone())
     } else {
         None

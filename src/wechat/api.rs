@@ -9,8 +9,8 @@ use serde::de::DeserializeOwned;
 use crate::storage::ILINK_API_ROOT;
 
 use super::models::{
-    EmptyResponse, FetchQrCodeResponse, GetUpdatesRequest, GetUpdatesResponse,
-    GetUploadUrlRequest, GetUploadUrlResponse, QrCodeStatusResponse, SendMessageRequest,
+    EmptyResponse, FetchQrCodeResponse, GetUpdatesRequest, GetUpdatesResponse, GetUploadUrlRequest,
+    GetUploadUrlResponse, QrCodeStatusResponse, SendMessageRequest,
 };
 
 const SESSION_EXPIRED_ERRCODE: i64 = -14;
@@ -70,15 +70,15 @@ fn random_wechat_uin() -> String {
 
 pub struct WeixinApiClient {
     client: Client,
-    token: String,
+    bot_token: String,
     route_tag: Option<String>,
 }
 
 impl WeixinApiClient {
-    pub fn new(token: &str, route_tag: Option<String>) -> Self {
+    pub fn new(bot_token: &str, route_tag: Option<String>) -> Self {
         Self {
             client: build_http_client(),
-            token: token.to_string(),
+            bot_token: bot_token.to_string(),
             route_tag,
         }
     }
@@ -94,10 +94,10 @@ impl WeixinApiClient {
             HeaderName::from_static("x-wechat-uin"),
             HeaderValue::from_str(&random_wechat_uin()).unwrap(),
         );
-        if !self.token.is_empty() {
+        if !self.bot_token.is_empty() {
             headers.insert(
                 reqwest::header::AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {}", self.token)).unwrap(),
+                HeaderValue::from_str(&format!("Bearer {}", self.bot_token)).unwrap(),
             );
         }
         if let Some(ref tag) = self.route_tag {
@@ -120,7 +120,12 @@ impl WeixinApiClient {
         headers
     }
 
-    async fn post_json<TReq, TResp>(&self, path: &str, body: &TReq, timeout: Duration) -> Result<TResp>
+    async fn post_json<TReq, TResp>(
+        &self,
+        path: &str,
+        body: &TReq,
+        timeout: Duration,
+    ) -> Result<TResp>
     where
         TReq: Serialize + ?Sized,
         TResp: DeserializeOwned,
@@ -193,7 +198,9 @@ impl WeixinApiClient {
             if code != 0 {
                 return Err(ApiError {
                     code,
-                    message: status.err_msg.unwrap_or_else(|| "unknown error".to_string()),
+                    message: status
+                        .err_msg
+                        .unwrap_or_else(|| "unknown error".to_string()),
                 }
                 .into());
             }
@@ -283,7 +290,7 @@ mod tests {
     #[test]
     fn test_client_new() {
         let client = WeixinApiClient::new("tok_123", None);
-        assert_eq!(client.token, "tok_123");
+        assert_eq!(client.bot_token, "tok_123");
         assert!(client.route_tag.is_none());
     }
 }

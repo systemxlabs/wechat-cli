@@ -93,7 +93,9 @@ pub async fn upload_media(
         .send()
         .await
         .context("failed to upload encrypted media to CDN")?;
-    let resp = resp.error_for_status().context("CDN upload returned an error status")?;
+    let resp = resp
+        .error_for_status()
+        .context("CDN upload returned an error status")?;
     let encrypt_query_param = resp
         .headers()
         .get("x-encrypted-param")

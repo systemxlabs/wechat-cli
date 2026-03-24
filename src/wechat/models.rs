@@ -43,8 +43,6 @@ pub struct QrCodeStatusResponse {
     #[serde(default)]
     pub bot_token: Option<String>,
     #[serde(default)]
-    pub ilink_bot_id: Option<String>,
-    #[serde(default)]
     pub ilink_user_id: Option<String>,
 }
 
@@ -58,8 +56,6 @@ pub struct QrCodeData {
     pub status: Option<String>,
     #[serde(default)]
     pub bot_token: Option<String>,
-    #[serde(default)]
-    pub ilink_bot_id: Option<String>,
     #[serde(default)]
     pub ilink_user_id: Option<String>,
 }
@@ -131,7 +127,11 @@ pub struct SendMessageRequest {
 }
 
 impl SendMessageRequest {
-    pub fn new(to_user_id: impl Into<String>, context_token: impl Into<String>, item: OutboundMessageItem) -> Self {
+    pub fn new(
+        to_user_id: impl Into<String>,
+        context_token: impl Into<String>,
+        item: OutboundMessageItem,
+    ) -> Self {
         Self {
             msg: OutboundMessage::new(to_user_id, context_token, vec![item]),
             base_info: BaseInfo::current(),
@@ -331,13 +331,6 @@ impl QrCodeStatusResponse {
             .as_ref()
             .and_then(|data| data.bot_token.as_deref())
             .or(self.bot_token.as_deref())
-    }
-
-    pub fn ilink_bot_id(&self) -> Option<&str> {
-        self.data
-            .as_ref()
-            .and_then(|data| data.ilink_bot_id.as_deref())
-            .or(self.ilink_bot_id.as_deref())
     }
 
     pub fn ilink_user_id(&self) -> Option<&str> {
