@@ -22,7 +22,19 @@ cargo install wechat-cli
 ## Usage
 
 ```
-wechat-cli [COMMAND]
+Usage: wechat-cli <COMMAND>
+
+Commands:
+  login              Log in with a QR code and save the account locally
+  qrcode             Request a login QR code and print it as JSON without saving anything locally
+  qrcode-status      Query a login QR code status and print it as JSON without saving anything locally
+  account            Inspect saved accounts
+  get-context-token  Wait for the next inbound message and print its context token
+  send               Send a text, image, or file message
+  help               Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print helpt-cli [COMMAND]
 ```
 
 ### Login
