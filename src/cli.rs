@@ -5,6 +5,7 @@ use clap::{ArgGroup, Args, Parser, Subcommand};
 #[derive(Debug, Parser)]
 #[command(name = "wechat-cli")]
 #[command(about = "Command-line client for WeChat iLink bot APIs")]
+#[command(version)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
