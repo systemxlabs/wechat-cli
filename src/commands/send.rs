@@ -31,6 +31,7 @@ pub async fn run(
     }
 }
 
+#[derive(Debug)]
 enum SendTarget {
     Saved {
         user_id: String,

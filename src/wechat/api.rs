@@ -68,6 +68,7 @@ fn random_wechat_uin() -> String {
     STANDARD.encode(raw.as_bytes())
 }
 
+#[derive(Debug)]
 pub struct WeixinApiClient {
     client: Client,
     bot_token: String,
