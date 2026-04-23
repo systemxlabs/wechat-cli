@@ -1,4 +1,4 @@
-﻿---
+---
 name: wechat-cli
 description: Use the `wechat-cli` command-line tool to log in a WeChat bot, manage accounts, and send text, image, or file messages to users.
 ---
