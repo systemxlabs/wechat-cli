@@ -59,7 +59,7 @@ pub fn print_accounts() -> Result<()> {
     Ok(())
 }
 
-pub fn delete_account(index: Option<usize>, _user_id: Option<&str>) -> Result<()> {
+pub fn delete_account(index: Option<usize>) -> Result<()> {
     let index = index.ok_or_else(|| anyhow!("--account <index> is required"))?;
     let user_id = load_account_by_index(index)?.user_id;
 
