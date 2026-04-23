@@ -101,8 +101,6 @@ pub struct GetContextTokenArgs {
 ))]
 #[command(after_help = "Saved account selection:
   1. --account <index>
-  2. --user-id <user_id>
-  3. default saved account index 0 if neither is provided
 
 Explicit credentials mode:
   --bot-token <bot_token> --user-id <user_id> [--route-tag <route_tag>]
@@ -114,12 +112,12 @@ Rules:
 pub struct SendArgs {
     #[arg(
         long,
-        help = "Saved account index from `wechat-cli account list`. If omitted together with `--user-id`, account index 0 is used"
+        help = "Saved account index from `wechat-cli account list`. Required if not using explicit credentials"
     )]
     pub account: Option<usize>,
     #[arg(
         long,
-        help = "Saved account user ID, or the target user ID when using explicit credentials"
+        help = "Target user ID. Required in explicit credentials mode (with `--bot-token`)"
     )]
     pub user_id: Option<String>,
     #[arg(long, help = "Explicit bot token. Requires `--user-id`")]

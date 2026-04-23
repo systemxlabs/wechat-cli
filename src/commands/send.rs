@@ -158,19 +158,22 @@ fn resolve_send_target(
         });
     }
 
-    if account.is_some() && user_id.is_some() {
-        bail!("`--account` and `--user-id` cannot be used together in saved account mode");
+    if account.is_none() && user_id.is_none() {
+        bail!("You must specify either `--account <index>` for a saved account, or use explicit credentials mode (`--bot-token` and `--user-id`)");
     }
 
     if let Some(index) = account {
+        if user_id.is_some() {
+            bail!("`--account` and `--user-id` cannot be used together in saved account mode");
+        }
         return Ok(SendTarget::Saved(load_account_by_index(index)?));
     }
 
-    if let Some(user_id) = user_id {
-        return Ok(SendTarget::Saved(load_account(Some(user_id))?));
+    if let Some(_user_id) = user_id {
+        bail!("Using `--user-id` to select a saved account is no longer supported. Please use `--account <index>` instead, or provide both `--bot-token` and `--user-id` for explicit credentials mode");
     }
 
-    Ok(SendTarget::Saved(load_account_by_index(0)?))
+    unreachable!()
 }
 
 fn detect_media_kind(file_path: &Path) -> OutboundMediaKind {
