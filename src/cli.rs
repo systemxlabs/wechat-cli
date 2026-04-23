@@ -117,12 +117,12 @@ pub struct SendArgs {
         help = "Saved account index from `wechat-cli account list`. Required for Saved Account Mode."
     )]
     pub account: Option<usize>,
+    #[arg(long, help = "Target user ID. Required in Explicit Credentials Mode.")]
+    pub user_id: Option<String>,
     #[arg(
         long,
-        help = "Target user ID. Required in Explicit Credentials Mode."
+        help = "Explicit bot token. Required in Explicit Credentials Mode."
     )]
-    pub user_id: Option<String>,
-    #[arg(long, help = "Explicit bot token. Required in Explicit Credentials Mode.")]
     pub bot_token: Option<String>,
     #[arg(
         long,

@@ -17,17 +17,6 @@ pub fn resolve_user_id(explicit: Option<&str>) -> Result<String> {
         .ok_or_else(|| anyhow!("no saved user found, run `wechat-cli login` first"))
 }
 
-pub fn load_account(user_id: Option<&str>) -> Result<AccountData> {
-    let user_id = resolve_user_id(user_id)?;
-    let user_ids = storage::get_account_ids().context("failed to load saved users")?;
-    if !user_ids.iter().any(|saved_id| saved_id == &user_id) {
-        bail!("user `{user_id}` not found");
-    }
-
-    storage::get_account_data(&user_id)
-        .with_context(|| format!("failed to load account data for `{user_id}`"))
-}
-
 pub fn load_account_by_index(index: usize) -> Result<AccountData> {
     let accounts = list_accounts()?;
     accounts
@@ -74,8 +63,12 @@ pub fn delete_account(index: Option<usize>, user_id: Option<&str>) -> Result<()>
     let user_id = match (index, user_id) {
         (Some(index), None) => load_account_by_index(index)?.user_id,
         (None, Some(user_id)) => {
-            let data = load_account(Some(user_id))?;
-            data.user_id
+            let resolved_id = resolve_user_id(Some(user_id))?;
+            let user_ids = storage::get_account_ids().context("failed to load saved users")?;
+            if !user_ids.iter().any(|saved_id| saved_id == &resolved_id) {
+                bail!("user `{resolved_id}` not found");
+            }
+            resolved_id
         }
         _ => bail!("exactly one of `--account` or `--user-id` is required"),
     };

@@ -40,7 +40,6 @@ enum SendTarget {
     Explicit {
         user_id: String,
         client: WeixinApiClient,
-        display_name: String,
     },
 }
 
@@ -54,17 +53,13 @@ async fn send_text(target: &SendTarget, context_token: Option<&str>, text: &str)
                 .context("failed to send text message")?;
             println!("sent text message to `{user_id}`");
         }
-        SendTarget::Explicit {
-            user_id,
-            client,
-            display_name,
-        } => {
-            let context_token = require_context_token(display_name, context_token)?;
+        SendTarget::Explicit { user_id, client } => {
+            let context_token = require_context_token(user_id, context_token)?;
             client
                 .send_text_message(user_id, &context_token, text)
                 .await
                 .context("failed to send text message")?;
-            println!("sent text message to `{user_id}` using {display_name}");
+            println!("sent text message to `{user_id}` using explicit bot token");
         }
     }
     Ok(())
@@ -103,12 +98,8 @@ async fn send_media(
                 file_path.display(),
             );
         }
-        SendTarget::Explicit {
-            user_id,
-            client,
-            display_name,
-        } => {
-            let context_token = require_context_token(display_name, context_token)?;
+        SendTarget::Explicit { user_id, client } => {
+            let context_token = require_context_token(user_id, context_token)?;
             let uploaded = upload_media(client, user_id, file_path, media_kind)
                 .await
                 .with_context(|| format!("failed to upload `{}`", file_path.display()))?;
@@ -120,13 +111,12 @@ async fn send_media(
                 .with_context(|| format!("failed to send `{}`", file_path.display()))?;
 
             println!(
-                "sent {} `{}` to `{user_id}` using {}",
+                "sent {} `{}` to `{user_id}` using explicit bot token",
                 match media_kind {
                     OutboundMediaKind::Image => "image",
                     OutboundMediaKind::File => "file",
                 },
                 file_path.display(),
-                display_name,
             );
         }
     }
@@ -151,11 +141,10 @@ fn resolve_send_target(
         let bot_token = bot_token
             .ok_or_else(|| anyhow!("`--bot-token` is required in explicit credential mode"))?
             .to_string();
-        
+
         return Ok(SendTarget::Explicit {
             user_id,
             client: WeixinApiClient::new(&bot_token, route_tag.map(str::to_string)),
-            display_name: "explicit bot token".to_string(),
         });
     }
 
@@ -168,7 +157,9 @@ fn resolve_send_target(
         });
     }
 
-    bail!("You must specify either `--account <index>` for a saved account, or use explicit credentials mode (`--bot-token` and `--user-id`)")
+    bail!(
+        "You must specify either `--account <index>` for a saved account, or use explicit credentials mode (`--bot-token` and `--user-id`)"
+    )
 }
 
 fn detect_media_kind(file_path: &Path) -> OutboundMediaKind {
@@ -197,7 +188,11 @@ mod tests {
         let result = resolve_send_target(None, None, None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("must specify either"), "Expected error about requiring auth params, got: {}", err_msg);
+        assert!(
+            err_msg.contains("must specify either"),
+            "Expected error about requiring auth params, got: {}",
+            err_msg
+        );
     }
 
     #[test]
@@ -205,7 +200,11 @@ mod tests {
         let result = resolve_send_target(Some(0), None, Some("token"), None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("cannot be used with"), "Expected error about mixing modes, got: {}", err_msg);
+        assert!(
+            err_msg.contains("cannot be used with"),
+            "Expected error about mixing modes, got: {}",
+            err_msg
+        );
     }
 
     #[test]
@@ -213,7 +212,11 @@ mod tests {
         let result = resolve_send_target(None, Some("user@im.wechat"), None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("bot-token"), "Expected error about missing bot-token, got: {}", err_msg);
+        assert!(
+            err_msg.contains("bot-token"),
+            "Expected error about missing bot-token, got: {}",
+            err_msg
+        );
     }
 
     #[test]
@@ -221,7 +224,11 @@ mod tests {
         let result = resolve_send_target(None, None, Some("token"), None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("user-id"), "Expected error about missing user-id, got: {}", err_msg);
+        assert!(
+            err_msg.contains("user-id"),
+            "Expected error about missing user-id, got: {}",
+            err_msg
+        );
     }
 
     #[test]
@@ -229,6 +236,10 @@ mod tests {
         let result = resolve_send_target(Some(0), Some("user@im.wechat"), None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("cannot be used with"), "Expected error about cannot use together, got: {}", err_msg);
+        assert!(
+            err_msg.contains("cannot be used with"),
+            "Expected error about cannot use together, got: {}",
+            err_msg
+        );
     }
 }
