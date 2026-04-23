@@ -4,7 +4,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use mime_guess::mime;
 
 use crate::{
-    commands::account::{AccountSession, build_client, load_account, load_account_by_index},
+    commands::account::{AccountSession, build_client, load_account_by_index},
     wechat::api::WeixinApiClient,
     wechat::media::{OutboundMediaKind, build_media_item, upload_media},
 };
@@ -38,6 +38,12 @@ enum SendTarget {
         client: WeixinApiClient,
         display_name: String,
     },
+}
+
+#[derive(Debug, PartialEq)]
+enum SendTargetKind {
+    Saved,
+    Explicit,
 }
 
 async fn send_text(target: &SendTarget, context_token: Option<&str>, text: &str) -> Result<()> {
@@ -139,37 +145,57 @@ fn resolve_send_target(
     bot_token: Option<&str>,
     route_tag: Option<&str>,
 ) -> Result<SendTarget> {
+    let kind = resolve_send_target_kind(account, user_id, bot_token, route_tag)?;
+
+    match kind {
+        SendTargetKind::Saved => Ok(SendTarget::Saved(load_account_by_index(account.unwrap())?)),
+        SendTargetKind::Explicit => {
+            let bot_token = bot_token
+                .ok_or_else(|| anyhow!("`--bot-token` is required in explicit credential mode"))?;
+            let user_id = user_id
+                .ok_or_else(|| anyhow!("`--user-id` is required in explicit credential mode"))?;
+            Ok(SendTarget::Explicit {
+                user_id: user_id.to_string(),
+                client: WeixinApiClient::new(bot_token, route_tag.map(str::to_string)),
+                display_name: "explicit bot token".to_string(),
+            })
+        }
+    }
+}
+
+fn resolve_send_target_kind(
+    account: Option<usize>,
+    user_id: Option<&str>,
+    bot_token: Option<&str>,
+    route_tag: Option<&str>,
+) -> Result<SendTargetKind> {
     let using_explicit = bot_token.is_some() || route_tag.is_some();
 
     if using_explicit {
         if account.is_some() {
             bail!("`--account` cannot be used with `--bot-token` / `--route-tag`");
         }
-
-        let bot_token = bot_token
-            .ok_or_else(|| anyhow!("`--bot-token` is required in explicit credential mode"))?;
-        let user_id = user_id
-            .ok_or_else(|| anyhow!("`--user-id` is required in explicit credential mode"))?;
-
-        return Ok(SendTarget::Explicit {
-            user_id: user_id.to_string(),
-            client: WeixinApiClient::new(bot_token, route_tag.map(str::to_string)),
-            display_name: "explicit bot token".to_string(),
-        });
+        if bot_token.is_none() {
+            bail!("`--bot-token` is required in explicit credential mode");
+        }
+        if user_id.is_none() {
+            bail!("`--user-id` is required in explicit credential mode");
+        }
+        return Ok(SendTargetKind::Explicit);
     }
 
     if account.is_none() && user_id.is_none() {
         bail!("You must specify either `--account <index>` for a saved account, or use explicit credentials mode (`--bot-token` and `--user-id`)");
     }
 
-    if let Some(index) = account {
+    if let Some(_) = account {
         if user_id.is_some() {
             bail!("`--account` and `--user-id` cannot be used together in saved account mode");
         }
-        return Ok(SendTarget::Saved(load_account_by_index(index)?));
+        return Ok(SendTargetKind::Saved);
     }
 
-    if let Some(_user_id) = user_id {
+    if let Some(_) = user_id {
         bail!("Using `--user-id` to select a saved account is no longer supported. Please use `--account <index>` instead, or provide both `--bot-token` and `--user-id` for explicit credentials mode");
     }
 
@@ -191,4 +217,78 @@ fn require_context_token(account_label: &str, explicit: Option<&str>) -> Result<
     bail!(
         "missing `--context-token` for `{account_label}`; run `wechat-cli get-context-token` for the bound user and pass the printed token"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_only_user_id_is_rejected() {
+        let result = resolve_send_target_kind(None, Some("user@im.wechat"), None, None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("no longer supported"), "Expected error about user-id no longer supported, got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_no_auth_params_is_rejected() {
+        let result = resolve_send_target_kind(None, None, None, None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("must specify either"), "Expected error about requiring auth params, got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_account_with_explicit_creds_is_rejected() {
+        let result = resolve_send_target_kind(Some(0), None, Some("token"), None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("cannot be used with"), "Expected error about mixing modes, got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_explicit_creds_succeeds() {
+        let result = resolve_send_target_kind(None, Some("user@im.wechat"), Some("token"), None);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), SendTargetKind::Explicit);
+    }
+
+    #[test]
+    fn test_explicit_creds_with_route_tag_succeeds() {
+        let result = resolve_send_target_kind(None, Some("user@im.wechat"), Some("token"), Some("route"));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), SendTargetKind::Explicit);
+    }
+
+    #[test]
+    fn test_account_only_succeeds() {
+        let result = resolve_send_target_kind(Some(0), None, None, None);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), SendTargetKind::Saved);
+    }
+
+    #[test]
+    fn test_explicit_creds_missing_bot_token_fails() {
+        let result = resolve_send_target_kind(None, Some("user@im.wechat"), None, Some("route"));
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("bot-token"), "Expected error about missing bot-token, got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_explicit_creds_missing_user_id_fails() {
+        let result = resolve_send_target_kind(None, None, Some("token"), None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("user-id"), "Expected error about missing user-id, got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_account_with_user_id_is_rejected() {
+        let result = resolve_send_target_kind(Some(0), Some("user@im.wechat"), None, None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("cannot be used together"), "Expected error about cannot use together, got: {}", err_msg);
+    }
 }

@@ -94,44 +94,35 @@ wechat-cli get-context-token [--user-id <user_id>]
 
 ### Send
 
-Send a text message:
+Send a text message using a saved account:
 
 ```bash
 wechat-cli send \
-  [--account <index> | --user-id <user_id>] \
+  --account <index> \
   --context-token <token> \
   --text "hello"
 ```
 
-Send an image:
+Send an image using a saved account:
 
 ```bash
 wechat-cli send \
-  [--account <index> | --user-id <user_id>] \
+  --account <index> \
   --context-token <token> \
   --file ./image.png
 ```
 
-Send a file:
+Send a file with caption using a saved account:
 
 ```bash
 wechat-cli send \
-  [--account <index> | --user-id <user_id>] \
-  --context-token <token> \
-  --file ./document.pdf
-```
-
-Send a file with caption:
-
-```bash
-wechat-cli send \
-  [--account <index> | --user-id <user_id>] \
+  --account <index> \
   --context-token <token> \
   --file ./image.png \
   --caption "this is an image"
 ```
 
-Use explicit credentials:
+Use explicit credentials (without saved account):
 
 ```bash
 wechat-cli send \
@@ -141,6 +132,11 @@ wechat-cli send \
   [--route-tag <route_tag>] \
   --text "hello"
 ```
+
+**Note:**
+- `--account <index>` is the only way to select a saved account.
+- Using `--user-id` alone to select a saved account is **no longer supported**.
+- If no authentication is provided, the command will fail instead of defaulting to account index 0.
 
 ## Storage
 
