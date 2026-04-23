@@ -72,7 +72,7 @@ pub struct AccountAddArgs {
 #[derive(Debug, Args)]
 #[command(group(
     ArgGroup::new("selector")
-        .args(["account", "user_id"])
+        .args(["account"])
         .required(true)
         .multiple(false)
 ))]
@@ -80,9 +80,6 @@ pub struct AccountDeleteArgs {
     /// Saved account index from `wechat-cli account list`.
     #[arg(long)]
     pub account: Option<usize>,
-    /// Saved account user ID.
-    #[arg(long)]
-    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Args)]

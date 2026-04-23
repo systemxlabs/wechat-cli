@@ -59,19 +59,9 @@ pub fn print_accounts() -> Result<()> {
     Ok(())
 }
 
-pub fn delete_account(index: Option<usize>, user_id: Option<&str>) -> Result<()> {
-    let user_id = match (index, user_id) {
-        (Some(index), None) => load_account_by_index(index)?.user_id,
-        (None, Some(user_id)) => {
-            let resolved_id = resolve_user_id(Some(user_id))?;
-            let user_ids = storage::get_account_ids().context("failed to load saved users")?;
-            if !user_ids.iter().any(|saved_id| saved_id == &resolved_id) {
-                bail!("user `{resolved_id}` not found");
-            }
-            resolved_id
-        }
-        _ => bail!("exactly one of `--account` or `--user-id` is required"),
-    };
+pub fn delete_account(index: Option<usize>, _user_id: Option<&str>) -> Result<()> {
+    let index = index.ok_or_else(|| anyhow!("--account <index> is required"))?;
+    let user_id = load_account_by_index(index)?.user_id;
 
     storage::delete_account_data(&user_id)?;
     println!("deleted account `{user_id}`");

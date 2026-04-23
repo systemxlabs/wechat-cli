@@ -31,9 +31,7 @@ async fn main() -> AnyResult<()> {
                 &args.bot_token,
                 args.route_tag.as_deref(),
             )?,
-            AccountCommand::Delete(args) => {
-                commands::account::delete_account(args.account, args.user_id.as_deref())?
-            }
+            AccountCommand::Delete(args) => commands::account::delete_account(args.account, None)?,
         },
         Command::GetContextToken(args) => {
             commands::get_context_token::run(args.user_id.as_deref()).await?;
