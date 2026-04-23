@@ -5,12 +5,6 @@ use crate::{
     wechat::api::WeixinApiClient,
 };
 
-#[derive(Debug)]
-pub struct AccountSession {
-    pub user_id: String,
-    pub data: AccountData,
-}
-
 pub fn resolve_user_id(explicit: Option<&str>) -> Result<String> {
     if let Some(user_id) = explicit {
         return Ok(user_id.to_string());
@@ -23,20 +17,18 @@ pub fn resolve_user_id(explicit: Option<&str>) -> Result<String> {
         .ok_or_else(|| anyhow!("no saved user found, run `wechat-cli login` first"))
 }
 
-pub fn load_account(user_id: Option<&str>) -> Result<AccountSession> {
+pub fn load_account(user_id: Option<&str>) -> Result<AccountData> {
     let user_id = resolve_user_id(user_id)?;
     let user_ids = storage::get_account_ids().context("failed to load saved users")?;
     if !user_ids.iter().any(|saved_id| saved_id == &user_id) {
         bail!("user `{user_id}` not found");
     }
 
-    let data = storage::get_account_data(&user_id)
-        .with_context(|| format!("failed to load account data for `{user_id}`"))?;
-
-    Ok(AccountSession { user_id, data })
+    storage::get_account_data(&user_id)
+        .with_context(|| format!("failed to load account data for `{user_id}`"))
 }
 
-pub fn load_account_by_index(index: usize) -> Result<AccountSession> {
+pub fn load_account_by_index(index: usize) -> Result<AccountData> {
     let accounts = list_accounts()?;
     accounts
         .into_iter()
@@ -44,17 +36,17 @@ pub fn load_account_by_index(index: usize) -> Result<AccountSession> {
         .ok_or_else(|| anyhow!("account index `{index}` not found"))
 }
 
-pub fn build_client(session: &AccountSession) -> WeixinApiClient {
-    WeixinApiClient::new(&session.data.bot_token, session.data.route_tag.clone())
+pub fn build_client(data: &AccountData) -> WeixinApiClient {
+    WeixinApiClient::new(&data.bot_token, data.route_tag.clone())
 }
 
-pub fn list_accounts() -> Result<Vec<AccountSession>> {
+pub fn list_accounts() -> Result<Vec<AccountData>> {
     let user_ids = storage::get_account_ids().context("failed to load saved users")?;
     let mut accounts = Vec::with_capacity(user_ids.len());
     for user_id in user_ids {
         let data = storage::get_account_data(&user_id)
             .with_context(|| format!("failed to load account data for `{user_id}`"))?;
-        accounts.push(AccountSession { user_id, data });
+        accounts.push(data);
     }
     Ok(accounts)
 }
@@ -67,10 +59,10 @@ pub fn print_accounts() -> Result<()> {
     }
 
     for (index, entry) in accounts.into_iter().enumerate() {
-        let route_tag = entry.data.route_tag.as_deref().unwrap_or("-");
+        let route_tag = entry.route_tag.as_deref().unwrap_or("-");
         println!("account: {index}");
         println!("user_id: {}", entry.user_id);
-        println!("saved_at: {}", entry.data.saved_at);
+        println!("saved_at: {}", entry.saved_at);
         println!("route_tag: {route_tag}");
         println!();
     }
@@ -82,8 +74,8 @@ pub fn delete_account(index: Option<usize>, user_id: Option<&str>) -> Result<()>
     let user_id = match (index, user_id) {
         (Some(index), None) => load_account_by_index(index)?.user_id,
         (None, Some(user_id)) => {
-            let session = load_account(Some(user_id))?;
-            session.user_id
+            let data = load_account(Some(user_id))?;
+            data.user_id
         }
         _ => bail!("exactly one of `--account` or `--user-id` is required"),
     };
