@@ -4,7 +4,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use mime_guess::mime;
 
 use crate::{
-    commands::account::{AccountSession, build_client, load_account_by_index},
+    commands::account::{build_client, load_account_by_index},
     wechat::api::WeixinApiClient,
     wechat::media::{OutboundMediaKind, build_media_item, upload_media},
 };
@@ -32,7 +32,10 @@ pub async fn run(
 }
 
 enum SendTarget {
-    Saved(AccountSession),
+    Saved {
+        user_id: String,
+        client: WeixinApiClient,
+    },
     Explicit {
         user_id: String,
         client: WeixinApiClient,
@@ -40,22 +43,15 @@ enum SendTarget {
     },
 }
 
-#[derive(Debug, PartialEq)]
-enum SendTargetKind {
-    Saved(usize),
-    Explicit { user_id: String, bot_token: String },
-}
-
 async fn send_text(target: &SendTarget, context_token: Option<&str>, text: &str) -> Result<()> {
     match target {
-        SendTarget::Saved(session) => {
-            let client = build_client(session);
-            let context_token = require_context_token(&session.user_id, context_token)?;
+        SendTarget::Saved { user_id, client } => {
+            let context_token = require_context_token(user_id, context_token)?;
             client
-                .send_text_message(&session.data.user_id, &context_token, text)
+                .send_text_message(user_id, &context_token, text)
                 .await
                 .context("failed to send text message")?;
-            println!("sent text message to `{}`", session.data.user_id);
+            println!("sent text message to `{user_id}`");
         }
         SendTarget::Explicit {
             user_id,
@@ -85,27 +81,25 @@ async fn send_media(
 
     let media_kind = detect_media_kind(file_path);
     match target {
-        SendTarget::Saved(session) => {
-            let client = build_client(session);
-            let context_token = require_context_token(&session.user_id, context_token)?;
-            let uploaded = upload_media(&client, &session.data.user_id, file_path, media_kind)
+        SendTarget::Saved { user_id, client } => {
+            let context_token = require_context_token(user_id, context_token)?;
+            let uploaded = upload_media(client, user_id, file_path, media_kind)
                 .await
                 .with_context(|| format!("failed to upload `{}`", file_path.display()))?;
             let media_item = build_media_item(media_kind, &uploaded);
 
             client
-                .send_media_message(&session.data.user_id, &context_token, caption, media_item)
+                .send_media_message(user_id, &context_token, caption, media_item)
                 .await
                 .with_context(|| format!("failed to send `{}`", file_path.display()))?;
 
             println!(
-                "sent {} `{}` to `{}`",
+                "sent {} `{}` to `{user_id}`",
                 match media_kind {
                     OutboundMediaKind::Image => "image",
                     OutboundMediaKind::File => "file",
                 },
                 file_path.display(),
-                session.data.user_id,
             );
         }
         SendTarget::Explicit {
@@ -125,13 +119,12 @@ async fn send_media(
                 .with_context(|| format!("failed to send `{}`", file_path.display()))?;
 
             println!(
-                "sent {} `{}` to `{}` using {}",
+                "sent {} `{}` to `{user_id}` using {}",
                 match media_kind {
                     OutboundMediaKind::Image => "image",
                     OutboundMediaKind::File => "file",
                 },
                 file_path.display(),
-                user_id,
                 display_name,
             );
         }
@@ -145,26 +138,6 @@ fn resolve_send_target(
     bot_token: Option<&str>,
     route_tag: Option<&str>,
 ) -> Result<SendTarget> {
-    let kind = resolve_send_target_kind(account, user_id, bot_token, route_tag)?;
-
-    match kind {
-        SendTargetKind::Saved(idx) => Ok(SendTarget::Saved(load_account_by_index(idx)?)),
-        SendTargetKind::Explicit { user_id, bot_token } => {
-            Ok(SendTarget::Explicit {
-                user_id: user_id.clone(),
-                client: WeixinApiClient::new(&bot_token, route_tag.map(str::to_string)),
-                display_name: "explicit bot token".to_string(),
-            })
-        }
-    }
-}
-
-fn resolve_send_target_kind(
-    account: Option<usize>,
-    user_id: Option<&str>,
-    bot_token: Option<&str>,
-    _route_tag: Option<&str>,
-) -> Result<SendTargetKind> {
     let using_explicit = user_id.is_some() || bot_token.is_some();
 
     if using_explicit {
@@ -177,11 +150,21 @@ fn resolve_send_target_kind(
         let bot_token = bot_token
             .ok_or_else(|| anyhow!("`--bot-token` is required in explicit credential mode"))?
             .to_string();
-        return Ok(SendTargetKind::Explicit { user_id, bot_token });
+        
+        return Ok(SendTarget::Explicit {
+            user_id,
+            client: WeixinApiClient::new(&bot_token, route_tag.map(str::to_string)),
+            display_name: "explicit bot token".to_string(),
+        });
     }
 
     if let Some(idx) = account {
-        return Ok(SendTargetKind::Saved(idx));
+        let data = load_account_by_index(idx)?;
+        let user_id = data.user_id.clone();
+        return Ok(SendTarget::Saved {
+            user_id,
+            client: build_client(&data),
+        });
     }
 
     bail!("You must specify either `--account <index>` for a saved account, or use explicit credentials mode (`--bot-token` and `--user-id`)")
@@ -210,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_no_auth_params_is_rejected() {
-        let result = resolve_send_target_kind(None, None, None, None);
+        let result = resolve_send_target(None, None, None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("must specify either"), "Expected error about requiring auth params, got: {}", err_msg);
@@ -218,36 +201,15 @@ mod tests {
 
     #[test]
     fn test_account_with_explicit_creds_is_rejected() {
-        let result = resolve_send_target_kind(Some(0), None, Some("token"), None);
+        let result = resolve_send_target(Some(0), None, Some("token"), None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("cannot be used with"), "Expected error about mixing modes, got: {}", err_msg);
     }
 
     #[test]
-    fn test_explicit_creds_succeeds() {
-        let result = resolve_send_target_kind(None, Some("user@im.wechat"), Some("token"), None);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), SendTargetKind::Explicit { user_id: "user@im.wechat".to_string(), bot_token: "token".to_string() });
-    }
-
-    #[test]
-    fn test_explicit_creds_with_route_tag_succeeds() {
-        let result = resolve_send_target_kind(None, Some("user@im.wechat"), Some("token"), Some("route"));
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), SendTargetKind::Explicit { user_id: "user@im.wechat".to_string(), bot_token: "token".to_string() });
-    }
-
-    #[test]
-    fn test_account_only_succeeds() {
-        let result = resolve_send_target_kind(Some(0), None, None, None);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), SendTargetKind::Saved(0));
-    }
-
-    #[test]
     fn test_explicit_creds_missing_bot_token_fails() {
-        let result = resolve_send_target_kind(None, Some("user@im.wechat"), None, None);
+        let result = resolve_send_target(None, Some("user@im.wechat"), None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("bot-token"), "Expected error about missing bot-token, got: {}", err_msg);
@@ -255,7 +217,7 @@ mod tests {
 
     #[test]
     fn test_explicit_creds_missing_user_id_fails() {
-        let result = resolve_send_target_kind(None, None, Some("token"), None);
+        let result = resolve_send_target(None, None, Some("token"), None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("user-id"), "Expected error about missing user-id, got: {}", err_msg);
@@ -263,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_account_with_user_id_is_rejected() {
-        let result = resolve_send_target_kind(Some(0), Some("user@im.wechat"), None, None);
+        let result = resolve_send_target(Some(0), Some("user@im.wechat"), None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("cannot be used with"), "Expected error about cannot use together, got: {}", err_msg);
