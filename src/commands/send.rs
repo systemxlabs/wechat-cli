@@ -42,8 +42,8 @@ enum SendTarget {
 
 #[derive(Debug, PartialEq)]
 enum SendTargetKind {
-    Saved,
-    Explicit,
+    Saved(usize),
+    Explicit { user_id: String, bot_token: String },
 }
 
 async fn send_text(target: &SendTarget, context_token: Option<&str>, text: &str) -> Result<()> {
@@ -148,15 +148,11 @@ fn resolve_send_target(
     let kind = resolve_send_target_kind(account, user_id, bot_token, route_tag)?;
 
     match kind {
-        SendTargetKind::Saved => Ok(SendTarget::Saved(load_account_by_index(account.unwrap())?)),
-        SendTargetKind::Explicit => {
-            let bot_token = bot_token
-                .ok_or_else(|| anyhow!("`--bot-token` is required in explicit credential mode"))?;
-            let user_id = user_id
-                .ok_or_else(|| anyhow!("`--user-id` is required in explicit credential mode"))?;
+        SendTargetKind::Saved(idx) => Ok(SendTarget::Saved(load_account_by_index(idx)?)),
+        SendTargetKind::Explicit { user_id, bot_token } => {
             Ok(SendTarget::Explicit {
-                user_id: user_id.to_string(),
-                client: WeixinApiClient::new(bot_token, route_tag.map(str::to_string)),
+                user_id: user_id.clone(),
+                client: WeixinApiClient::new(&bot_token, route_tag.map(str::to_string)),
                 display_name: "explicit bot token".to_string(),
             })
         }
@@ -167,39 +163,28 @@ fn resolve_send_target_kind(
     account: Option<usize>,
     user_id: Option<&str>,
     bot_token: Option<&str>,
-    route_tag: Option<&str>,
+    _route_tag: Option<&str>,
 ) -> Result<SendTargetKind> {
-    let using_explicit = bot_token.is_some() || route_tag.is_some();
+    let using_explicit = user_id.is_some() || bot_token.is_some();
 
     if using_explicit {
         if account.is_some() {
-            bail!("`--account` cannot be used with `--bot-token` / `--route-tag`");
+            bail!("`--account` cannot be used with `--bot-token` / `--user-id`");
         }
-        if bot_token.is_none() {
-            bail!("`--bot-token` is required in explicit credential mode");
-        }
-        if user_id.is_none() {
-            bail!("`--user-id` is required in explicit credential mode");
-        }
-        return Ok(SendTargetKind::Explicit);
+        let user_id = user_id
+            .ok_or_else(|| anyhow!("`--user-id` is required in explicit credential mode"))?
+            .to_string();
+        let bot_token = bot_token
+            .ok_or_else(|| anyhow!("`--bot-token` is required in explicit credential mode"))?
+            .to_string();
+        return Ok(SendTargetKind::Explicit { user_id, bot_token });
     }
 
-    if account.is_none() && user_id.is_none() {
-        bail!("You must specify either `--account <index>` for a saved account, or use explicit credentials mode (`--bot-token` and `--user-id`)");
+    if let Some(idx) = account {
+        return Ok(SendTargetKind::Saved(idx));
     }
 
-    if let Some(_) = account {
-        if user_id.is_some() {
-            bail!("`--account` and `--user-id` cannot be used together in saved account mode");
-        }
-        return Ok(SendTargetKind::Saved);
-    }
-
-    if let Some(_) = user_id {
-        bail!("Using `--user-id` to select a saved account is no longer supported. Please use `--account <index>` instead, or provide both `--bot-token` and `--user-id` for explicit credentials mode");
-    }
-
-    unreachable!()
+    bail!("You must specify either `--account <index>` for a saved account, or use explicit credentials mode (`--bot-token` and `--user-id`)")
 }
 
 fn detect_media_kind(file_path: &Path) -> OutboundMediaKind {
@@ -224,14 +209,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_only_user_id_is_rejected() {
-        let result = resolve_send_target_kind(None, Some("user@im.wechat"), None, None);
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("no longer supported"), "Expected error about user-id no longer supported, got: {}", err_msg);
-    }
-
-    #[test]
     fn test_no_auth_params_is_rejected() {
         let result = resolve_send_target_kind(None, None, None, None);
         assert!(result.is_err());
@@ -251,26 +228,26 @@ mod tests {
     fn test_explicit_creds_succeeds() {
         let result = resolve_send_target_kind(None, Some("user@im.wechat"), Some("token"), None);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), SendTargetKind::Explicit);
+        assert_eq!(result.unwrap(), SendTargetKind::Explicit { user_id: "user@im.wechat".to_string(), bot_token: "token".to_string() });
     }
 
     #[test]
     fn test_explicit_creds_with_route_tag_succeeds() {
         let result = resolve_send_target_kind(None, Some("user@im.wechat"), Some("token"), Some("route"));
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), SendTargetKind::Explicit);
+        assert_eq!(result.unwrap(), SendTargetKind::Explicit { user_id: "user@im.wechat".to_string(), bot_token: "token".to_string() });
     }
 
     #[test]
     fn test_account_only_succeeds() {
         let result = resolve_send_target_kind(Some(0), None, None, None);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), SendTargetKind::Saved);
+        assert_eq!(result.unwrap(), SendTargetKind::Saved(0));
     }
 
     #[test]
     fn test_explicit_creds_missing_bot_token_fails() {
-        let result = resolve_send_target_kind(None, Some("user@im.wechat"), None, Some("route"));
+        let result = resolve_send_target_kind(None, Some("user@im.wechat"), None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("bot-token"), "Expected error about missing bot-token, got: {}", err_msg);
@@ -289,6 +266,6 @@ mod tests {
         let result = resolve_send_target_kind(Some(0), Some("user@im.wechat"), None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("cannot be used together"), "Expected error about cannot use together, got: {}", err_msg);
+        assert!(err_msg.contains("cannot be used with"), "Expected error about cannot use together, got: {}", err_msg);
     }
 }

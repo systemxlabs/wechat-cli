@@ -133,11 +133,6 @@ wechat-cli send \
   --text "hello"
 ```
 
-**Note:**
-- `--account <index>` is the only way to select a saved account.
-- Using `--user-id` alone to select a saved account is **no longer supported**.
-- If no authentication is provided, the command will fail instead of defaulting to account index 0.
-
 ## Storage
 
 Local files are stored under:

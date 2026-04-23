@@ -1,4 +1,4 @@
----
+﻿---
 name: wechat-cli
 description: Use the `wechat-cli` command-line tool to log in a WeChat bot, manage accounts, and send text, image, or file messages to users.
 ---
@@ -66,38 +66,38 @@ wechat-cli account delete --user-id <user_id>
 
 Before sending, you need a `context_token`.
 
-### Send Text
+### Send Text (Saved Account)
 
 ```bash
 wechat-cli send \
-  [--account <index> | --user-id <user_id>] \
+  --account <index> \
   --context-token <token> \
   --text "hello"
 ```
 
-### Send Image
+### Send Image (Saved Account)
 
 ```bash
 wechat-cli send \
-  [--account <index> | --user-id <user_id>] \
+  --account <index> \
   --context-token <token> \
   --file <image_path>
 ```
 
-### Send File
+### Send File (Saved Account)
 
 ```bash
 wechat-cli send \
-  [--account <index> | --user-id <user_id>] \
+  --account <index> \
   --context-token <token> \
   --file <file_path>
 ```
 
-### Send With Caption
+### Send With Caption (Saved Account)
 
 ```bash
 wechat-cli send \
-  [--account <index> | --user-id <user_id>] \
+  --account <index> \
   --context-token <token> \
   --file <file_path> \
   --caption "caption text"
