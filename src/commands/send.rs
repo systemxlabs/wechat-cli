@@ -9,6 +9,7 @@ use crate::{
     wechat::media::{OutboundMediaKind, build_media_item, upload_media},
 };
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     account: Option<usize>,
     user_id: Option<&str>,
