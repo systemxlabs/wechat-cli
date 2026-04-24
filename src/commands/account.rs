@@ -1,21 +1,9 @@
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Result, bail};
 
 use crate::{
     storage::{self, AccountData, load_accounts},
     wechat::api::WeixinApiClient,
 };
-
-pub fn resolve_user_id(explicit: Option<&str>) -> Result<String> {
-    if let Some(user_id) = explicit {
-        return Ok(user_id.to_string());
-    }
-
-    let user_ids = storage::get_account_ids().context("failed to load saved users")?;
-    user_ids
-        .into_iter()
-        .next()
-        .ok_or_else(|| anyhow!("no saved user found, run `wechat-cli login` first"))
-}
 
 pub fn build_client(data: &AccountData) -> WeixinApiClient {
     WeixinApiClient::new(&data.bot_token, data.route_tag.clone())
@@ -24,16 +12,17 @@ pub fn build_client(data: &AccountData) -> WeixinApiClient {
 pub fn print_accounts() -> Result<()> {
     let accounts = load_accounts()?;
     if accounts.is_empty() {
-        println!("no saved users");
+        println!("no saved accounts");
         return Ok(());
     }
 
     for (index, entry) in accounts.into_iter().enumerate() {
         let route_tag = entry.route_tag.as_deref().unwrap_or("-");
         println!("account: {index}");
+        println!("bot_token: {}", entry.bot_token);
         println!("user_id: {}", entry.user_id);
-        println!("saved_at: {}", entry.saved_at);
         println!("route_tag: {route_tag}");
+        println!("saved_at: {}", entry.saved_at);
         println!();
     }
 
