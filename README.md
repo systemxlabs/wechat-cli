@@ -78,12 +78,6 @@ Delete an account by index:
 wechat-cli account delete --account <index>
 ```
 
-Delete an account by user ID:
-
-```bash
-wechat-cli account delete --user-id <user_id>
-```
-
 ### Get Context Token
 
 Wait for the next incoming message and print the `context_token`:

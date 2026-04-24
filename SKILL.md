@@ -48,16 +48,8 @@ wechat-cli account add \
 
 ### Delete Account
 
-By index:
-
 ```bash
 wechat-cli account delete --account <index>
-```
-
-By user ID:
-
-```bash
-wechat-cli account delete --user-id <user_id>
 ```
 
 ## Send

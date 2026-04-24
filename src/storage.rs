@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Ok, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 /// Fixed `WeChat` iLink API root.
@@ -52,6 +52,10 @@ fn load_accounts_file() -> Result<AccountsFile> {
     serde_json::from_str(&data).context("failed to parse accounts file")
 }
 
+pub(crate) fn load_accounts() -> Result<Vec<AccountData>> {
+    Ok(load_accounts_file()?.accounts)
+}
+
 fn save_accounts_file(accounts: &AccountsFile) -> Result<()> {
     let path = accounts_file_path();
     std::fs::create_dir_all(path.parent().unwrap()).with_context(|| {
@@ -88,13 +92,22 @@ pub fn get_account_data(account_id: &str) -> Result<AccountData> {
         .ok_or_else(|| anyhow!("account `{account_id}` not found"))
 }
 
+/// Loads the saved credentials for the given account index.
+pub fn load_account(account_idx: usize) -> Result<AccountData> {
+    let mut accounts = load_accounts_file()?;
+    if account_idx >= accounts.accounts.len() {
+        return Err(anyhow!("account index `{account_idx}` out of bound"));
+    }
+    Ok(accounts.accounts.remove(account_idx))
+}
+
 /// Saves credentials for the given stable user ID to local storage.
-pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
+pub fn save_account_data(data: &AccountData) -> Result<()> {
     let mut accounts = load_accounts_file()?;
     if let Some(existing) = accounts
         .accounts
         .iter_mut()
-        .find(|account| account.user_id == account_id)
+        .find(|account| account.user_id == data.user_id)
     {
         *existing = AccountData {
             bot_token: data.bot_token.clone(),
@@ -113,17 +126,15 @@ pub fn save_account_data(account_id: &str, data: &AccountData) -> Result<()> {
     save_accounts_file(&accounts)
 }
 
-/// Deletes credentials for the given stable user ID from local storage.
-pub fn delete_account_data(account_id: &str) -> Result<()> {
+/// Deletes credentials for the given account index from local storage.
+pub fn delete_account(account_idx: usize) -> Result<AccountData> {
     let mut accounts = load_accounts_file()?;
-    let original_len = accounts.accounts.len();
-    accounts
-        .accounts
-        .retain(|account| account.user_id != account_id);
-    if accounts.accounts.len() == original_len {
-        return Err(anyhow!("account `{account_id}` not found"));
+    if account_idx >= accounts.accounts.len() {
+        return Err(anyhow!("account index `{account_idx}` out of bound"));
     }
-    save_accounts_file(&accounts)
+    let removed = accounts.accounts.remove(account_idx);
+    save_accounts_file(&accounts)?;
+    Ok(removed)
 }
 
 #[cfg(test)]

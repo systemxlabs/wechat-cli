@@ -4,9 +4,12 @@ use anyhow::{Context, Result, anyhow, bail};
 use mime_guess::mime;
 
 use crate::{
-    commands::account::{build_client, load_account_by_index},
-    wechat::api::WeixinApiClient,
-    wechat::media::{OutboundMediaKind, build_media_item, upload_media},
+    commands::account::build_client,
+    storage::load_account,
+    wechat::{
+        api::WeixinApiClient,
+        media::{OutboundMediaKind, build_media_item, upload_media},
+    },
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -150,7 +153,7 @@ fn resolve_send_target(
     }
 
     if let Some(idx) = account {
-        let data = load_account_by_index(idx)?;
+        let data = load_account(idx)?;
         let user_id = data.user_id.clone();
         return Ok(SendTarget::Saved {
             user_id,

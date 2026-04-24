@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 
 use crate::{
-    storage::{self, AccountData},
+    storage::{self, AccountData, load_accounts},
     wechat::api::WeixinApiClient,
 };
 
@@ -17,31 +17,12 @@ pub fn resolve_user_id(explicit: Option<&str>) -> Result<String> {
         .ok_or_else(|| anyhow!("no saved user found, run `wechat-cli login` first"))
 }
 
-pub fn load_account_by_index(index: usize) -> Result<AccountData> {
-    let accounts = list_accounts()?;
-    accounts
-        .into_iter()
-        .nth(index)
-        .ok_or_else(|| anyhow!("account index `{index}` not found"))
-}
-
 pub fn build_client(data: &AccountData) -> WeixinApiClient {
     WeixinApiClient::new(&data.bot_token, data.route_tag.clone())
 }
 
-pub fn list_accounts() -> Result<Vec<AccountData>> {
-    let user_ids = storage::get_account_ids().context("failed to load saved users")?;
-    let mut accounts = Vec::with_capacity(user_ids.len());
-    for user_id in user_ids {
-        let data = storage::get_account_data(&user_id)
-            .with_context(|| format!("failed to load account data for `{user_id}`"))?;
-        accounts.push(data);
-    }
-    Ok(accounts)
-}
-
 pub fn print_accounts() -> Result<()> {
-    let accounts = list_accounts()?;
+    let accounts = load_accounts()?;
     if accounts.is_empty() {
         println!("no saved users");
         return Ok(());
@@ -60,10 +41,8 @@ pub fn print_accounts() -> Result<()> {
 }
 
 pub fn delete_account(index: usize) -> Result<()> {
-    let user_id = load_account_by_index(index)?.user_id;
-
-    storage::delete_account_data(&user_id)?;
-    println!("deleted account `{user_id}`");
+    let deleted = storage::delete_account(index)?;
+    println!("deleted account `{deleted:?}`");
     Ok(())
 }
 
@@ -81,7 +60,7 @@ pub fn add_account(user_id: &str, bot_token: &str, route_tag: Option<&str>) -> R
         user_id: user_id.to_string(),
         route_tag: route_tag.map(str::to_string),
     };
-    storage::save_account_data(user_id, &data)?;
+    storage::save_account_data(&data)?;
 
     println!("saved account `{user_id}`");
     Ok(())

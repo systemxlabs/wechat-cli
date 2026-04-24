@@ -63,7 +63,7 @@ pub async fn login() -> Result<String> {
                     user_id: user_id.to_string(),
                     route_tag: None,
                 };
-                storage::save_account_data(&account_id, &account_data)?;
+                storage::save_account_data(&account_data)?;
 
                 info!("Login successful! User ID: {account_id}");
                 return Ok(account_id);
