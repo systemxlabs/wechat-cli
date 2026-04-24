@@ -1,9 +1,10 @@
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 
 use crate::{
     commands::account::{build_client, resolve_user_id},
-    storage::{self, load_account},
-    wechat::api::{WeixinApiClient, is_session_expired},
+    commands::send::{SendTarget, resolve_send_target},
+    storage::{self},
+    wechat::api::is_session_expired,
     wechat::models::InboundMessage,
 };
 
@@ -13,10 +14,21 @@ pub async fn run(
     bot_token: Option<&str>,
     route_tag: Option<&str>,
 ) -> Result<()> {
-    let target = resolve_target(account, user_id, bot_token, route_tag)?;
+    let target = if account.is_none() && user_id.is_none() && bot_token.is_none() {
+        let resolved_id = resolve_user_id(None)?;
+        let session = storage::get_account_data(&resolved_id)
+            .with_context(|| format!("failed to load account data for `{resolved_id}`"))?;
+        SendTarget::Saved {
+            user_id: resolved_id,
+            client: build_client(&session),
+        }
+    } else {
+        resolve_send_target(account, user_id, bot_token, route_tag)?
+    };
+
     let (user_id, client) = match target {
-        Target::Saved { user_id, client } => (user_id, client),
-        Target::Explicit { user_id, client } => (user_id, client),
+        SendTarget::Saved { user_id, client } => (user_id, client),
+        SendTarget::Explicit { user_id, client } => (user_id, client),
     };
 
     let mut consecutive_errors = 0u32;
@@ -61,55 +73,6 @@ pub async fn run(
     }
 }
 
-#[derive(Debug)]
-enum Target {
-    Saved { user_id: String, client: WeixinApiClient },
-    Explicit { user_id: String, client: WeixinApiClient },
-}
-
-fn resolve_target(
-    account: Option<usize>,
-    user_id: Option<&str>,
-    bot_token: Option<&str>,
-    route_tag: Option<&str>,
-) -> Result<Target> {
-    let using_explicit = user_id.is_some() || bot_token.is_some();
-
-    if using_explicit {
-        if account.is_some() {
-            bail!("`--account` cannot be used with `--bot-token` / `--user-id`");
-        }
-        let user_id = user_id
-            .ok_or_else(|| anyhow!("`--user-id` is required in explicit credential mode"))?
-            .to_string();
-        let bot_token = bot_token
-            .ok_or_else(|| anyhow!("`--bot-token` is required in explicit credential mode"))?
-            .to_string();
-
-        return Ok(Target::Explicit {
-            user_id,
-            client: WeixinApiClient::new(&bot_token, route_tag.map(str::to_string)),
-        });
-    }
-
-    if let Some(idx) = account {
-        let data = load_account(idx)?;
-        let user_id = data.user_id.clone();
-        return Ok(Target::Saved {
-            user_id,
-            client: build_client(&data),
-        });
-    }
-
-    let resolved_id = resolve_user_id(None)?;
-    let session = storage::get_account_data(&resolved_id)
-        .with_context(|| format!("failed to load account data for `{resolved_id}`"))?;
-    Ok(Target::Saved {
-        user_id: resolved_id,
-        client: build_client(&session),
-    })
-}
-
 fn is_timeout_error(err: &anyhow::Error) -> bool {
     err.chain()
         .find_map(|cause| cause.downcast_ref::<reqwest::Error>())
@@ -130,11 +93,11 @@ fn extract_context_token(user_id: &str, message: &InboundMessage) -> Option<Stri
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::commands::send::resolve_send_target;
 
     #[test]
-    fn test_account_with_explicit_creds_is_rejected() {
-        let result = resolve_target(Some(0), None, Some("token"), None);
+    fn test_shared_resolve_rejects_mixed_modes() {
+        let result = resolve_send_target(Some(0), None, Some("token"), None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -145,8 +108,8 @@ mod tests {
     }
 
     #[test]
-    fn test_explicit_creds_missing_bot_token_fails() {
-        let result = resolve_target(None, Some("user@im.wechat"), None, None);
+    fn test_shared_resolve_rejects_missing_bot_token() {
+        let result = resolve_send_target(None, Some("user@im.wechat"), None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -157,8 +120,8 @@ mod tests {
     }
 
     #[test]
-    fn test_explicit_creds_missing_user_id_fails() {
-        let result = resolve_target(None, None, Some("token"), None);
+    fn test_shared_resolve_rejects_missing_user_id() {
+        let result = resolve_send_target(None, None, Some("token"), None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -169,8 +132,8 @@ mod tests {
     }
 
     #[test]
-    fn test_account_with_user_id_is_rejected() {
-        let result = resolve_target(Some(0), Some("user@im.wechat"), None, None);
+    fn test_shared_resolve_rejects_account_with_user_id() {
+        let result = resolve_send_target(Some(0), Some("user@im.wechat"), None, None);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -179,5 +142,4 @@ mod tests {
             err_msg
         );
     }
-
 }
