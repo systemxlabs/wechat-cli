@@ -2,17 +2,35 @@ use anyhow::{Context, Result, bail};
 
 use crate::{
     commands::account::{build_client, resolve_user_id},
-    storage,
+    commands::send::{SendTarget, resolve_send_target},
+    storage::{self},
     wechat::api::is_session_expired,
     wechat::models::InboundMessage,
 };
 
-pub async fn run(user_id: Option<&str>) -> Result<()> {
-    let resolved_id = resolve_user_id(user_id)?;
-    let session = storage::get_account_data(&resolved_id)
-        .with_context(|| format!("failed to load account data for `{resolved_id}`"))?;
-    let client = build_client(&session);
-    let user_id = session.user_id;
+pub async fn run(
+    account: Option<usize>,
+    user_id: Option<&str>,
+    bot_token: Option<&str>,
+    route_tag: Option<&str>,
+) -> Result<()> {
+    let target = if account.is_none() && user_id.is_none() && bot_token.is_none() {
+        let resolved_id = resolve_user_id(None)?;
+        let session = storage::get_account_data(&resolved_id)
+            .with_context(|| format!("failed to load account data for `{resolved_id}`"))?;
+        SendTarget::Saved {
+            user_id: resolved_id,
+            client: build_client(&session),
+        }
+    } else {
+        resolve_send_target(account, user_id, bot_token, route_tag)?
+    };
+
+    let (user_id, client) = match target {
+        SendTarget::Saved { user_id, client } => (user_id, client),
+        SendTarget::Explicit { user_id, client } => (user_id, client),
+    };
+
     let mut consecutive_errors = 0u32;
 
     eprintln!("waiting for the bound user to send a message for `{user_id}`; press Ctrl+C to stop");
@@ -70,5 +88,58 @@ fn extract_context_token(user_id: &str, message: &InboundMessage) -> Option<Stri
         Some(message.context_token.clone())
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::commands::send::resolve_send_target;
+
+    #[test]
+    fn test_shared_resolve_rejects_mixed_modes() {
+        let result = resolve_send_target(Some(0), None, Some("token"), None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("cannot be used with"),
+            "Expected error about mixing modes, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_shared_resolve_rejects_missing_bot_token() {
+        let result = resolve_send_target(None, Some("user@im.wechat"), None, None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("bot-token"),
+            "Expected error about missing bot-token, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_shared_resolve_rejects_missing_user_id() {
+        let result = resolve_send_target(None, None, Some("token"), None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("user-id"),
+            "Expected error about missing user-id, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_shared_resolve_rejects_account_with_user_id() {
+        let result = resolve_send_target(Some(0), Some("user@im.wechat"), None, None);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("cannot be used with"),
+            "Expected error about cannot use together, got: {}",
+            err_msg
+        );
     }
 }

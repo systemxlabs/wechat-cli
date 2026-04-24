@@ -77,10 +77,36 @@ pub struct AccountDeleteArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = "Authentication Modes:
+  1. Saved Account Mode:
+     --account <index>
+  
+  2. Explicit Credentials Mode:
+     --bot-token <token> --user-id <user_id> [--route-tag <tag>]
+
+Usage Rules:
+  - Omit all auth params to use the first saved account.
+  - Or use exactly one of the modes above.
+  - --account cannot be combined with --bot-token or --user-id.
+  - In Explicit mode, both --bot-token and --user-id are required.")]
 pub struct GetContextTokenArgs {
-    /// Saved account user ID. If omitted, the first saved account is used.
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "Saved account index from `wechat-cli account list`. Required for Saved Account Mode."
+    )]
+    pub account: Option<usize>,
+    #[arg(long, help = "Target user ID. Required in Explicit Credentials Mode.")]
     pub user_id: Option<String>,
+    #[arg(
+        long,
+        help = "Explicit bot token. Required in Explicit Credentials Mode."
+    )]
+    pub bot_token: Option<String>,
+    #[arg(
+        long,
+        help = "Optional route tag used only in Explicit Credentials Mode."
+    )]
+    pub route_tag: Option<String>,
 }
 
 #[derive(Debug, Args)]

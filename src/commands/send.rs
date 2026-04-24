@@ -36,7 +36,7 @@ pub async fn run(
 }
 
 #[derive(Debug)]
-enum SendTarget {
+pub enum SendTarget {
     Saved {
         user_id: String,
         client: WeixinApiClient,
@@ -127,7 +127,7 @@ async fn send_media(
     Ok(())
 }
 
-fn resolve_send_target(
+pub fn resolve_send_target(
     account: Option<usize>,
     user_id: Option<&str>,
     bot_token: Option<&str>,
