@@ -80,7 +80,7 @@ pub struct AccountDeleteArgs {
 #[command(after_help = "Authentication Modes:
   1. Saved Account Mode:
      --account <index>
-  
+
   2. Explicit Credentials Mode:
      --bot-token <token> --user-id <user_id> [--route-tag <tag>]
 
@@ -112,21 +112,29 @@ pub struct GetContextTokenArgs {
 #[command(group(
     ArgGroup::new("message")
         .args(["text", "file"])
-        .required(true)
+        .required(false)
         .multiple(false)
 ))]
 #[command(after_help = "Authentication Modes:
   1. Saved Account Mode:
      --account <index>
-  
+
   2. Explicit Credentials Mode:
      --bot-token <token> --user-id <user_id> [--route-tag <tag>]
 
+Message Sources:
+  - --text <text>              Plain text message body
+  - --file <path>              File or image to send
+  - piped stdin                Read text from a pipe when neither --text nor --file is given
+
 Usage Rules:
-  - You must use exactly one of the modes above.
+  - You must use exactly one of the auth modes above.
   - --account cannot be combined with --bot-token or --user-id.
   - In Explicit mode, both --bot-token and --user-id are required.
-  - --context-token is always required for sending and must be provided explicitly.")]
+  - --context-token is always required for sending and must be provided explicitly.
+  - --text and --file are mutually exclusive.
+  - If neither --text nor --file is provided, the CLI reads from stdin.
+    This only works when stdin is a pipe or redirected file, not an interactive terminal.")]
 pub struct SendArgs {
     #[arg(
         long,
