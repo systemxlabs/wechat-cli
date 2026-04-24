@@ -31,9 +31,7 @@ pub fn resolve_send_content(
         (Some(_), Some(_)) => bail!("`--text` and `--file` cannot be used together"),
         (None, None) => {
             if !stdin_is_pipe {
-                bail!(
-                    "one of `--text`, `--file`, or piped stdin is required"
-                );
+                bail!("one of `--text`, `--file`, or piped stdin is required");
             }
             let mut buf = String::new();
             stdin_reader.read_to_string(&mut buf)?;
