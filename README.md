@@ -12,6 +12,7 @@ A CLI tool to interact with a Wechat iLink bot.
 - Manage multi accounts
 - Get `context_token`
 - Send text, images, and files to WeChat users
+- Read message text from stdin (pipe) when `--text` is omitted
 
 ## Installation
 
@@ -80,10 +81,21 @@ wechat-cli account delete --account <index>
 
 ### Get Context Token
 
-Wait for the next incoming message and print the `context_token`:
+Wait for the next incoming message and print the `context_token`.
+
+Using a saved account:
 
 ```bash
-wechat-cli get-context-token [--user-id <user_id>]
+wechat-cli get-context-token --account <index>
+```
+
+Using explicit credentials:
+
+```bash
+wechat-cli get-context-token \
+  --bot-token <bot_token> \
+  --user-id <user_id> \
+  [--route-tag <route_tag>]
 ```
 
 ### Send
@@ -95,6 +107,23 @@ wechat-cli send \
   --account <index> \
   --context-token <token> \
   --text "hello"
+```
+
+Send text from stdin (pipe):
+
+```bash
+echo "hello from pipe" | wechat-cli send \
+  --account <index> \
+  --context-token <token>
+```
+
+Send text from a file via stdin redirection:
+
+```bash
+wechat-cli send \
+  --account <index> \
+  --context-token <token> \
+  < message.txt
 ```
 
 Send an image using a saved account:
@@ -126,6 +155,15 @@ wechat-cli send \
   [--route-tag <route_tag>] \
   --text "hello"
 ```
+
+#### Message Source Priority
+
+When sending, the CLI resolves the message source in this order:
+
+1. If `--text` is provided, it is used regardless of stdin.
+2. If `--file` is provided, it is used regardless of stdin.
+3. If neither `--text` nor `--file` is provided, stdin is read when it is a pipe or redirected file.
+4. If stdin is an interactive terminal and neither `--text` nor `--file` is provided, an error is returned.
 
 ## Storage
 

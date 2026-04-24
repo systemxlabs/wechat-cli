@@ -67,6 +67,25 @@ wechat-cli send \
   --text "hello"
 ```
 
+### Send Text from Stdin (Pipe)
+
+When `--text` is omitted and stdin is a pipe or redirected file, the CLI reads the message body from stdin:
+
+```bash
+echo "hello from pipe" | wechat-cli send \
+  --account <index> \
+  --context-token <token>
+```
+
+Or redirect from a file:
+
+```bash
+wechat-cli send \
+  --account <index> \
+  --context-token <token> \
+  < message.txt
+```
+
 ### Send Image (Saved Account)
 
 ```bash
@@ -116,6 +135,8 @@ wechat-cli send \
 - `--context-token` is always required for `send`.
 - `--text` and `--file` are mutually exclusive.
 - `--caption` only works with `--file`.
+- When neither `--text` nor `--file` is provided, stdin is read if it is a pipe or redirected file.
+- When `--text` is explicitly provided, stdin is ignored even if a pipe is present.
 
 ## Local Storage
 

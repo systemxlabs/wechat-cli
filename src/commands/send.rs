@@ -1,3 +1,4 @@
+use std::io::{self, IsTerminal, Read};
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -12,6 +13,38 @@ use crate::{
     },
 };
 
+#[derive(Debug, PartialEq)]
+pub enum SendContent {
+    Text(String),
+    File(std::path::PathBuf),
+}
+
+pub fn resolve_send_content(
+    text: Option<&str>,
+    file_path: Option<&Path>,
+    stdin_reader: &mut dyn Read,
+    stdin_is_pipe: bool,
+) -> Result<SendContent> {
+    match (text, file_path) {
+        (Some(text), None) => Ok(SendContent::Text(text.to_string())),
+        (None, Some(file_path)) => Ok(SendContent::File(file_path.to_path_buf())),
+        (Some(_), Some(_)) => bail!("`--text` and `--file` cannot be used together"),
+        (None, None) => {
+            if !stdin_is_pipe {
+                bail!(
+                    "one of `--text`, `--file`, or piped stdin is required"
+                );
+            }
+            let mut buf = String::new();
+            stdin_reader.read_to_string(&mut buf)?;
+            if buf.trim().is_empty() {
+                bail!("stdin is empty; provide text via `--text` or pipe content");
+            }
+            Ok(SendContent::Text(buf))
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     account: Option<usize>,
@@ -25,13 +58,14 @@ pub async fn run(
 ) -> Result<()> {
     let send_target = resolve_send_target(account, user_id, bot_token, route_tag)?;
 
-    match (text, file_path) {
-        (Some(text), None) => send_text(&send_target, context_token, text).await,
-        (None, Some(file_path)) => {
-            send_media(&send_target, context_token, file_path, caption).await
+    let stdin_is_pipe = !io::stdin().is_terminal();
+    let content = resolve_send_content(text, file_path, &mut io::stdin(), stdin_is_pipe)?;
+
+    match content {
+        SendContent::Text(text) => send_text(&send_target, context_token, &text).await,
+        SendContent::File(file_path) => {
+            send_media(&send_target, context_token, &file_path, caption).await
         }
-        (Some(_), Some(_)) => bail!("`--text` and `--file` cannot be used together"),
-        (None, None) => bail!("one of `--text` or `--file` is required"),
     }
 }
 
@@ -243,6 +277,73 @@ mod tests {
         assert!(
             err_msg.contains("cannot be used with"),
             "Expected error about cannot use together, got: {}",
+            err_msg
+        );
+    }
+
+    // Tests for resolve_send_content
+
+    #[test]
+    fn test_text_takes_priority_over_stdin() {
+        let mut stdin = "stdin content".as_bytes();
+        let result = resolve_send_content(Some("hello"), None, &mut stdin, true);
+        assert_eq!(result.unwrap(), SendContent::Text("hello".to_string()));
+    }
+
+    #[test]
+    fn test_file_takes_priority_over_stdin() {
+        let mut stdin = "stdin content".as_bytes();
+        let path = Path::new("/tmp/file.txt");
+        let result = resolve_send_content(None, Some(path), &mut stdin, true);
+        assert_eq!(result.unwrap(), SendContent::File(path.to_path_buf()));
+    }
+
+    #[test]
+    fn test_stdin_used_when_no_text_or_file_and_pipe() {
+        let mut stdin = "hello from stdin".as_bytes();
+        let result = resolve_send_content(None, None, &mut stdin, true);
+        assert_eq!(
+            result.unwrap(),
+            SendContent::Text("hello from stdin".to_string())
+        );
+    }
+
+    #[test]
+    fn test_error_when_no_text_or_file_and_terminal_stdin() {
+        let mut stdin = "".as_bytes();
+        let result = resolve_send_content(None, None, &mut stdin, false);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("one of `--text`, `--file`, or piped stdin"),
+            "Expected error about requiring text/file/stdin, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_error_when_both_text_and_file() {
+        let mut stdin = "".as_bytes();
+        let path = Path::new("/tmp/file.txt");
+        let result = resolve_send_content(Some("hello"), Some(path), &mut stdin, false);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("cannot be used together"),
+            "Expected error about mutually exclusive, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_error_when_stdin_empty() {
+        let mut stdin = "   ".as_bytes();
+        let result = resolve_send_content(None, None, &mut stdin, true);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("stdin is empty"),
+            "Expected error about empty stdin, got: {}",
             err_msg
         );
     }
