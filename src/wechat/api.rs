@@ -156,12 +156,10 @@ impl WeixinApiClient {
         let body_bytes = serde_json::to_vec(body).context("failed to serialize request body")?;
         let headers = self.json_headers(body_bytes.len());
         let url = format!("{}/{}", ILINK_API_ROOT, path);
-        
+
         self.request(
             path,
-            || {
-                self.client.post(&url).headers(headers).body(body_bytes)
-            },
+            || self.client.post(&url).headers(headers).body(body_bytes),
             timeout,
         )
         .await
@@ -180,7 +178,10 @@ impl WeixinApiClient {
         self.request(
             path,
             || {
-                self.client.post(&url).headers(self.auth_headers()).form(form)
+                self.client
+                    .post(&url)
+                    .headers(self.auth_headers())
+                    .form(form)
             },
             timeout,
         )
@@ -214,13 +215,11 @@ impl WeixinApiClient {
                 let message = match code {
                     -2 => "Invalid context token".to_string(),
                     -3 => "User ID mismatch or not found".to_string(),
-                    _ => status.err_msg.unwrap_or_else(|| "unknown error".to_string()),
+                    _ => status
+                        .err_msg
+                        .unwrap_or_else(|| "unknown error".to_string()),
                 };
-                return Err(ApiError {
-                    code,
-                    message,
-                }
-                .into());
+                return Err(ApiError { code, message }.into());
             }
         }
 
