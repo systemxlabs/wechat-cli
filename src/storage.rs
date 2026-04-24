@@ -71,16 +71,6 @@ fn save_accounts_file(accounts: &AccountsFile) -> Result<()> {
     Ok(())
 }
 
-/// Loads the saved credentials for the given stable user ID.
-pub fn get_account_data(account_id: &str) -> Result<AccountData> {
-    let accounts = load_accounts_file()?;
-    accounts
-        .accounts
-        .into_iter()
-        .find(|account| account.user_id == account_id)
-        .ok_or_else(|| anyhow!("account `{account_id}` not found"))
-}
-
 /// Loads the saved credentials for the given account index.
 pub fn load_account(account_idx: usize) -> Result<AccountData> {
     let mut accounts = load_accounts_file()?;
