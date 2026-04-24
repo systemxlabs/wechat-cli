@@ -121,6 +121,28 @@ impl WeixinApiClient {
         headers
     }
 
+    async fn request<TResp>(
+        &self,
+        path: &str,
+        body_provider: impl FnOnce() -> reqwest::RequestBuilder,
+        timeout: Duration,
+    ) -> Result<TResp>
+    where
+        TResp: DeserializeOwned,
+    {
+        let url = format!("{}/{}", ILINK_API_ROOT, path);
+        let response_bytes = body_provider()
+            .timeout(timeout)
+            .send()
+            .await
+            .with_context(|| format!("error sending request for url ({url})"))?
+            .bytes()
+            .await
+            .with_context(|| format!("error reading response body for url ({url})"))?;
+
+        Self::decode_response(&response_bytes)
+    }
+
     async fn post_json<TReq, TResp>(
         &self,
         path: &str,
@@ -131,22 +153,16 @@ impl WeixinApiClient {
         TReq: Serialize + ?Sized,
         TResp: DeserializeOwned,
     {
-        let url = format!("{}/{}", ILINK_API_ROOT, path);
         let body_bytes = serde_json::to_vec(body).context("failed to serialize request body")?;
-        let response_bytes = self
-            .client
-            .post(&url)
-            .headers(self.json_headers(body_bytes.len()))
-            .body(body_bytes)
-            .timeout(timeout)
-            .send()
-            .await
-            .with_context(|| format!("error sending request for url ({url})"))?
-            .bytes()
-            .await
-            .with_context(|| format!("error reading response body for url ({url})"))?;
+        let headers = self.json_headers(body_bytes.len());
+        let url = format!("{}/{}", ILINK_API_ROOT, path);
 
-        Self::decode_response(&response_bytes)
+        self.request(
+            path,
+            || self.client.post(&url).headers(headers).body(body_bytes),
+            timeout,
+        )
+        .await
     }
 
     async fn post_form<TResp>(
@@ -159,20 +175,17 @@ impl WeixinApiClient {
         TResp: DeserializeOwned,
     {
         let url = format!("{}/{}", ILINK_API_ROOT, path);
-        let response_bytes = self
-            .client
-            .post(&url)
-            .headers(self.auth_headers())
-            .form(form)
-            .timeout(timeout)
-            .send()
-            .await
-            .with_context(|| format!("error sending request for url ({url})"))?
-            .bytes()
-            .await
-            .with_context(|| format!("error reading response body for url ({url})"))?;
-
-        Self::decode_response(&response_bytes)
+        self.request(
+            path,
+            || {
+                self.client
+                    .post(&url)
+                    .headers(self.auth_headers())
+                    .form(form)
+            },
+            timeout,
+        )
+        .await
     }
 
     fn decode_response<T>(response_bytes: &[u8]) -> Result<T>
@@ -182,6 +195,7 @@ impl WeixinApiClient {
         let status: ApiStatus =
             serde_json::from_slice(response_bytes).context("failed to decode API status")?;
 
+        // Priority 1: errcode (often for session/auth errors)
         if let Some(code) = status.errcode {
             if code == SESSION_EXPIRED_ERRCODE {
                 return Err(SessionExpiredError.into());
@@ -195,15 +209,17 @@ impl WeixinApiClient {
             }
         }
 
+        // Priority 2: ret (often for business logic errors)
         if let Some(code) = status.ret {
             if code != 0 {
-                return Err(ApiError {
-                    code,
-                    message: status
+                let message = match code {
+                    -2 => "Invalid context token".to_string(),
+                    -3 => "User ID mismatch or not found".to_string(),
+                    _ => status
                         .err_msg
                         .unwrap_or_else(|| "unknown error".to_string()),
-                }
-                .into());
+                };
+                return Err(ApiError { code, message }.into());
             }
         }
 
@@ -293,5 +309,52 @@ mod tests {
         let client = WeixinApiClient::new("tok_123", None);
         assert_eq!(client.bot_token, "tok_123");
         assert!(client.route_tag.is_none());
+    }
+
+    #[test]
+    fn test_decode_response_success() {
+        let bytes = b"{}";
+        let res: Result<EmptyResponse> = WeixinApiClient::decode_response(bytes);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_decode_response_invalid_token() {
+        let bytes = b"{\"ret\":-2}";
+        let res: Result<EmptyResponse> = WeixinApiClient::decode_response(bytes);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(err.to_string().contains("Invalid context token"));
+        assert!(err.to_string().contains("-2"));
+    }
+
+    #[test]
+    fn test_decode_response_wrong_user() {
+        let bytes = b"{\"ret\":-3}";
+        let res: Result<EmptyResponse> = WeixinApiClient::decode_response(bytes);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(err.to_string().contains("User ID mismatch or not found"));
+        assert!(err.to_string().contains("-3"));
+    }
+
+    #[test]
+    fn test_decode_response_session_expired() {
+        let bytes = b"{\"errcode\":-14,\"errmsg\":\"session timeout\"}";
+        let res: Result<EmptyResponse> = WeixinApiClient::decode_response(bytes);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(is_session_expired(&err));
+        assert!(err.to_string().contains("Session expired"));
+    }
+
+    #[test]
+    fn test_decode_response_unknown_api_error() {
+        let bytes = b"{\"ret\":-99, \"err_msg\":\"something went wrong\"}";
+        let res: Result<EmptyResponse> = WeixinApiClient::decode_response(bytes);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(err.to_string().contains("something went wrong"));
+        assert!(err.to_string().contains("-99"));
     }
 }
