@@ -12,7 +12,6 @@ A CLI tool to interact with a Wechat iLink bot.
 - Manage multi accounts
 - Get `context_token`
 - Send text, images, and files to WeChat users
-- Read message text from stdin (pipe) when `--text` is omitted
 
 ## Installation
 
