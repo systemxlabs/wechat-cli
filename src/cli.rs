@@ -85,8 +85,7 @@ pub struct AccountDeleteArgs {
      --bot-token <token> --user-id <user_id> [--route-tag <tag>]
 
 Usage Rules:
-  - Omit all auth params to use the first saved account.
-  - Or use exactly one of the modes above.
+  - You must use exactly one of the modes above.
   - --account cannot be combined with --bot-token or --user-id.
   - In Explicit mode, both --bot-token and --user-id are required.")]
 pub struct GetContextTokenArgs {

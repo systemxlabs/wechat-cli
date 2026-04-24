@@ -1,9 +1,7 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 
 use crate::{
-    commands::account::{build_client, resolve_user_id},
     commands::send::{SendTarget, resolve_send_target},
-    storage::{self},
     wechat::api::is_session_expired,
     wechat::models::InboundMessage,
 };
@@ -14,17 +12,7 @@ pub async fn run(
     bot_token: Option<&str>,
     route_tag: Option<&str>,
 ) -> Result<()> {
-    let target = if account.is_none() && user_id.is_none() && bot_token.is_none() {
-        let resolved_id = resolve_user_id(None)?;
-        let session = storage::get_account_data(&resolved_id)
-            .with_context(|| format!("failed to load account data for `{resolved_id}`"))?;
-        SendTarget::Saved {
-            user_id: resolved_id,
-            client: build_client(&session),
-        }
-    } else {
-        resolve_send_target(account, user_id, bot_token, route_tag)?
-    };
+    let target = resolve_send_target(account, user_id, bot_token, route_tag)?;
 
     let (user_id, client) = match target {
         SendTarget::Saved { user_id, client } => (user_id, client),

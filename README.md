@@ -80,10 +80,21 @@ wechat-cli account delete --account <index>
 
 ### Get Context Token
 
-Wait for the next incoming message and print the `context_token`:
+Wait for the next incoming message and print the `context_token`.
+
+Using a saved account:
 
 ```bash
-wechat-cli get-context-token [--user-id <user_id>]
+wechat-cli get-context-token --account <index>
+```
+
+Using explicit credentials:
+
+```bash
+wechat-cli get-context-token \
+  --bot-token <bot_token> \
+  --user-id <user_id> \
+  [--route-tag <route_tag>]
 ```
 
 ### Send
