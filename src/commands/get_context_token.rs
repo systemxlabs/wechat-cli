@@ -1,16 +1,13 @@
 use anyhow::{Context, Result, bail};
 
 use crate::{
-    commands::account::{build_client, resolve_user_id},
-    storage,
-    wechat::api::is_session_expired,
+    commands::account::build_client, storage, wechat::api::is_session_expired,
     wechat::models::InboundMessage,
 };
 
-pub async fn run(user_id: Option<&str>) -> Result<()> {
-    let resolved_id = resolve_user_id(user_id)?;
-    let session = storage::get_account_data(&resolved_id)
-        .with_context(|| format!("failed to load account data for `{resolved_id}`"))?;
+pub async fn run(user_id: &str) -> Result<()> {
+    let session = storage::get_account_data(user_id)
+        .with_context(|| format!("failed to load account data for `{user_id}`"))?;
     let client = build_client(&session);
     let user_id = session.user_id;
     let mut consecutive_errors = 0u32;

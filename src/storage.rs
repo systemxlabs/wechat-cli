@@ -71,17 +71,6 @@ fn save_accounts_file(accounts: &AccountsFile) -> Result<()> {
     Ok(())
 }
 
-/// Returns the list of saved stable user IDs from local storage.
-pub fn get_account_ids() -> Result<Vec<String>> {
-    let accounts = load_accounts_file()?;
-    Ok(accounts
-        .accounts
-        .into_iter()
-        .map(|account| account.user_id)
-        .filter(|id| id.ends_with("@im.wechat"))
-        .collect())
-}
-
 /// Loads the saved credentials for the given stable user ID.
 pub fn get_account_data(account_id: &str) -> Result<AccountData> {
     let accounts = load_accounts_file()?;

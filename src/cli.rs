@@ -78,9 +78,9 @@ pub struct AccountDeleteArgs {
 
 #[derive(Debug, Args)]
 pub struct GetContextTokenArgs {
-    /// Saved account user ID. If omitted, the first saved account is used.
+    /// Saved account user ID.
     #[arg(long)]
-    pub user_id: Option<String>,
+    pub user_id: String,
 }
 
 #[derive(Debug, Args)]
