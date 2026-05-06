@@ -339,6 +339,7 @@ mod tests {
         assert!(res.is_err());
         let err = res.unwrap_err();
         assert!(err.is::<ApiError>());
+        assert!(is_session_expired(&err));
         assert!(err.to_string().contains("Invalid bot token"));
         assert!(err.to_string().contains("-14"));
     }
