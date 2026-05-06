@@ -41,19 +41,9 @@ impl fmt::Display for ApiError {
 
 impl StdError for ApiError {}
 
-#[derive(Debug)]
-pub struct SessionExpiredError;
-
-impl fmt::Display for SessionExpiredError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Session expired")
-    }
-}
-
-impl StdError for SessionExpiredError {}
-
 pub fn is_session_expired(err: &anyhow::Error) -> bool {
-    err.is::<SessionExpiredError>()
+    err.downcast_ref::<ApiError>()
+        .is_some_and(|e| e.code == SESSION_EXPIRED_ERRCODE)
 }
 
 pub(crate) fn build_http_client() -> Client {
@@ -198,7 +188,11 @@ impl WeixinApiClient {
         // Priority 1: errcode (often for session/auth errors)
         if let Some(code) = status.errcode {
             if code == SESSION_EXPIRED_ERRCODE {
-                return Err(SessionExpiredError.into());
+                return Err(ApiError {
+                    code,
+                    message: "Invalid bot token".to_string(),
+                }
+                .into());
             }
             if code != 0 {
                 return Err(ApiError {
@@ -344,8 +338,9 @@ mod tests {
         let res: Result<EmptyResponse> = WeixinApiClient::decode_response(bytes);
         assert!(res.is_err());
         let err = res.unwrap_err();
-        assert!(is_session_expired(&err));
-        assert!(err.to_string().contains("Session expired"));
+        assert!(err.is::<ApiError>());
+        assert!(err.to_string().contains("Invalid bot token"));
+        assert!(err.to_string().contains("-14"));
     }
 
     #[test]
